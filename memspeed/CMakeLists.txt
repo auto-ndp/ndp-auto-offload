@@ -14,10 +14,12 @@ endif()
 
 set(exe_sources
   src/memspeed.cpp
+  src/benchmarks.cpp
+  src/cpuonly.cpp
 )
 
 add_executable(${PROJECT_NAME} ${exe_sources})
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
+target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
 
 include(../cmake/CompilerWarnings.cmake)
 set_project_warnings(${PROJECT_NAME})
