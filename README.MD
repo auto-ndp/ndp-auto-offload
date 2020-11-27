@@ -1,4 +1,6 @@
-# Automatic and transparent offloading of computation to near-data processing units – Code
+# Automatic and transparent offloading of computation to near-data processing units
+
+Code used in my PhD project at the University of Edinburgh.
 
 # Folders
 
