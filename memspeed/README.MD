@@ -4,7 +4,7 @@
 
 ```
 mkdir build && cd build
-cmake -GNinja ..
+cmake -GNinja -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
 ninja # Re-run this to build after changes
 ./memspeed
 ```

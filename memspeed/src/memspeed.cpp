@@ -44,7 +44,7 @@ int main(int argc, char **argv) {
     fprintf(stderr, "Usage: %s [-bench=a] [-bench=b] [-...]\n",
             (argc > 0) ? argv[0] : "memspeed");
     fprintf(stderr, "Options available:\n -help - shows this help text\n "
-                    "-bench BENCH - enables the benchmark BENCH\n");
+                    "-bench=BENCH - enables the benchmark BENCH\n");
     for (const auto &bench : benchmarks) {
       fprintf(stderr, "\nOptions for benchmark `%s`:\n", bench->name().c_str());
       bench->print_help();
