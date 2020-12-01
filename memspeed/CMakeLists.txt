@@ -8,6 +8,8 @@ project(
 
 message(STATUS "Started CMake for ${PROJECT_NAME} v${PROJECT_VERSION}...\n")
 
+option(ENABLE_UPMEM_DPU "Enables upmem's DPU benchmark" OFF)
+
 if(PROJECT_SOURCE_DIR STREQUAL PROJECT_BINARY_DIR)
   message(FATAL_ERROR "In-source builds not allowed. Please make a new directory (called a build directory) and run CMake from there.\n")
 endif()
@@ -18,8 +20,16 @@ set(exe_sources
   src/cpuonly.cpp
 )
 
+set(cpp_defines)
+
+if(ENABLE_UPMEM_DPU)
+  list(APPEND exe_sources src/upmemdpu.cpp)
+  list(APPEND cpp_defines ENABLE_UPMEM_DPU)
+endif()
+
 add_executable(${PROJECT_NAME} ${exe_sources})
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
+target_compile_definitions(${PROJECT_NAME} PUBLIC ${cpp_defines})
 
 include(../cmake/CompilerWarnings.cmake)
 set_project_warnings(${PROJECT_NAME})

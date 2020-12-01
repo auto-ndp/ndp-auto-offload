@@ -1,5 +1,6 @@
 #include "memspeed.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <ctime>
@@ -29,11 +30,11 @@ public:
 
   std::string name() final { return "cpuonly"s; }
   virtual void parse_arg(std::string_view arg) final {
-    if (std::string_view pfx = "-maxsize="; arg.starts_with(pfx)) {
+    if (std::string_view pfx = "-maxsize="; starts_with(arg, pfx)) {
       std::string_view argval = arg.substr(pfx.size());
       this->buffer_size = parseSize(std::string(argval)) / 8 * 8;
     }
-    if (std::string_view pfx = "-minsize="; arg.starts_with(pfx)) {
+    if (std::string_view pfx = "-minsize="; starts_with(arg, pfx)) {
       std::string_view argval = arg.substr(pfx.size());
       this->min_size = parseSize(std::string(argval)) / 8 * 8;
     }
@@ -84,7 +85,13 @@ public:
         start_time = get_cpu_tsc();
         full_mem_fence();
         for (size_t _c = 0; _c < reps; _c++) {
-          std::copy_n(src_buffer, run_size_ints, dst_buffer);
+          // std::copy_n(src_buffer, run_size_ints, dst_buffer);
+          volatile uint32_t *src = src_buffer, *dst = dst_buffer;
+          for (size_t _i = 0; _i < run_size_ints; _i++) {
+            *dst = *src;
+            src++;
+            dst++;
+          }
           full_mem_fence();
         }
         end_time = get_cpu_tsc();

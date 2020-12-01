@@ -22,7 +22,7 @@ int main(int argc, char **argv) {
     std::string_view arg{argv[argi]};
     if (arg == "-help") {
       wants_help = true;
-    } else if (std::string_view pfx = "-bench="; arg.starts_with(pfx)) {
+    } else if (std::string_view pfx = "-bench="; starts_with(arg, pfx)) {
       std::string_view argval = arg.substr(pfx.size());
       auto bench = std::find_if(
           benchmarks.cbegin(), benchmarks.cend(),
