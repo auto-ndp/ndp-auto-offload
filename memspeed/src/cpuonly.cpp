@@ -59,8 +59,9 @@ public:
   virtual void run(std::ostream &log) final {
     assert(src_buffer != nullptr);
     assert(dst_buffer != nullptr);
-    for (size_t run_size = sizeof(uint32_t); run_size <= this->buffer_size;
+    for (size_t run_size = 2 * sizeof(uint32_t); run_size <= this->buffer_size;
          run_size *= 2) {
+      size_t run_size_ints = run_size / sizeof(uint32_t);
       log << " Size = " << formatSize(run_size) << std::endl;
       uint64_t start_time = 0, end_time = 0, delta = 0;
       double dbl_delta = 0.0;
@@ -69,23 +70,54 @@ public:
       if (run_size < 32768) {
         reps = 32768 / run_size;
       }
+      // Copy trials
       for (int _trial = 0; _trial < 5; _trial++) {
         reset_cpu_tsc();
         full_mem_fence();
         start_time = get_cpu_tsc();
         full_mem_fence();
         for (size_t _c = 0; _c < reps; _c++) {
-          std::copy_n(src_buffer, run_size / sizeof(uint32_t), dst_buffer);
+          std::copy_n(src_buffer, run_size_ints, dst_buffer);
           full_mem_fence();
         }
         end_time = get_cpu_tsc();
         full_mem_fence();
         delta = (end_time - start_time) / reps;
-        log << "  Trial time: " << delta << std::endl;
+        log << "  Copy trial time: " << delta << std::endl;
         dbl_delta = static_cast<double>(delta) * 1.0e-9; // in seconds
-        log << "  Throughput: "
+        log << "  Copy average per-byte time: "
+            << 1.0e9 * dbl_delta / dbl_run_size << "ns" << std::endl;
+        log << "  Copy throughput: "
             << formatSize(static_cast<size_t>(dbl_run_size / dbl_delta)) << "/s"
             << std::endl;
+      }
+      // Latency (list traversal) trials
+      for (int _trial = 0; _trial < 5; _trial++) {
+        reset_cpu_tsc();
+        full_mem_fence();
+        start_time = get_cpu_tsc();
+        full_mem_fence();
+        size_t pos = static_cast<size_t>(_trial);
+        for (size_t _c = 0; _c < reps; _c++) {
+          for (size_t els = 0; els < run_size_ints; els++) {
+            pos = src_buffer[pos] & (run_size_ints - 1);
+          }
+        }
+        full_mem_fence();
+        end_time = get_cpu_tsc();
+        full_mem_fence();
+        delta = (end_time - start_time) / reps;
+        log << "  Listwalk trial time: " << delta << "  # endpos = " << pos
+            << std::endl;
+        dbl_delta = static_cast<double>(delta) * 1.0e-9; // in seconds
+        log << "  Listwalk average per-jump time: "
+            << 1.0e9 * dbl_delta /
+                   static_cast<double>(run_size_ints)
+            << "ns" << std::endl;
+        log << "  Listwalk throughput: "
+            << formatSize(static_cast<size_t>(dbl_run_size / dbl_delta) /
+                          sizeof(uint32_t))
+            << "/s" << std::endl;
       }
     }
   }
