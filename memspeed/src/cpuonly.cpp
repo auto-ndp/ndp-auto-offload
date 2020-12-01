@@ -3,15 +3,16 @@
 #include <cassert>
 #include <cstdint>
 #include <ctime>
+#include <iostream>
 #include <memory>
 #include <random>
 #include <sys/mman.h>
-#include <iostream>
 
 using namespace std::string_literals;
 
 class CpuOnlyBenchmark : public MemspeedBenchmark {
 public:
+  size_t min_size = 2 * sizeof(uint32_t);
   size_t buffer_size = 4 * 1024 * 1024;
   volatile uint32_t *src_buffer = nullptr, *dst_buffer = nullptr;
 
@@ -32,10 +33,15 @@ public:
       std::string_view argval = arg.substr(pfx.size());
       this->buffer_size = parseSize(std::string(argval)) / 8 * 8;
     }
+    if (std::string_view pfx = "-minsize="; arg.starts_with(pfx)) {
+      std::string_view argval = arg.substr(pfx.size());
+      this->min_size = parseSize(std::string(argval)) / 8 * 8;
+    }
   }
   virtual void print_help() final {
     fprintf(stderr,
-            " -maxsize=4M - specifies maximum buffer size for speed tests\n");
+            " -maxsize=4M - specifies maximum buffer size for speed tests\n"
+            " -minsize=8  - specifies the first buffer size tested\n");
   }
   virtual void prepare(std::ostream &log) final {
     log << "Allocating buffers of size: " << formatSize(this->buffer_size)
@@ -60,7 +66,7 @@ public:
   virtual void run(std::ostream &log) final {
     assert(src_buffer != nullptr);
     assert(dst_buffer != nullptr);
-    for (size_t run_size = 2 * sizeof(uint32_t); run_size <= this->buffer_size;
+    for (size_t run_size = this->min_size; run_size <= this->buffer_size;
          run_size *= 2) {
       size_t run_size_ints = run_size / sizeof(uint32_t);
       log << " Size = " << formatSize(run_size) << std::endl;
@@ -112,9 +118,8 @@ public:
             << std::endl;
         dbl_delta = static_cast<double>(delta) * 1.0e-9; // in seconds
         log << "  Listwalk average per-jump time: "
-            << 1.0e9 * dbl_delta /
-                   static_cast<double>(run_size_ints)
-            << "ns" << std::endl;
+            << 1.0e9 * dbl_delta / static_cast<double>(run_size_ints) << "ns"
+            << std::endl;
         log << "  Listwalk throughput: "
             << formatSize(static_cast<size_t>(dbl_run_size / dbl_delta) /
                           sizeof(uint32_t))
