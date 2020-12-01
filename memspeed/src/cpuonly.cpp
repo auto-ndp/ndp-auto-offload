@@ -6,6 +6,7 @@
 #include <memory>
 #include <random>
 #include <sys/mman.h>
+#include <iostream>
 
 using namespace std::string_literals;
 
