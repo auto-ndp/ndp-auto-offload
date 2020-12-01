@@ -31,6 +31,11 @@ add_executable(${PROJECT_NAME} ${exe_sources})
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
 target_compile_definitions(${PROJECT_NAME} PUBLIC ${cpp_defines})
 
+if(ENABLE_UPMEM_DPU)
+  target_include_directories(${PROJECT_NAME} PUBLIC /usr/include/dpu)
+  target_link_libraries(${PROJECT_NAME} PUBLIC dpu)
+endif()
+
 include(../cmake/CompilerWarnings.cmake)
 set_project_warnings(${PROJECT_NAME})
 
