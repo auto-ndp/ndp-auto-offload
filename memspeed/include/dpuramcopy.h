@@ -1,0 +1,9 @@
+#pragma once
+
+// DRAM
+#define COPYMODE_MRAM 1
+// SRAM (Data CCM)
+#define COPYMODE_WRAM 2
+
+#define MRAM_BUFFER_DWORDS 1024
+#define WRAM_BUFFER_DWORDS 128
