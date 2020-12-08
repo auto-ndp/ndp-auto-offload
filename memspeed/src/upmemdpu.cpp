@@ -277,7 +277,7 @@ static void DpuCopyCpuArgs(benchmark::internal::Benchmark *b) {
     for (const auto dpu_count : DpuBenchFixture::dpu_counts())
       for (const auto broadcast : {0, 1})
         for (const auto mram : {0, 1}) {
-          if (!mram && mem_arg > WRAM_BUFFER_DWORDS) {
+          if (!mram && mem_arg > 2 * WRAM_BUFFER_DWORDS) {
             continue;
           }
           b->Args({mem_arg, dpu_count, broadcast, 1, mram});
@@ -289,7 +289,7 @@ static void DpuCopyCpuArgs(benchmark::internal::Benchmark *b) {
 
 BENCHMARK_DEFINE_F(DpuBenchFixture, BM_dpu_copy_between_cpu_dpu)
 (benchmark::State &state) {
-  DPU_CHECK(dpu_load(dpu_set, "../dpusrc/ramcopy.dpuelf", nullptr),
+  DPU_CHECK(dpu_load(dpu_set, "../dpusrc/cpucopy.dpuelf", nullptr),
             throw std::runtime_error("DPU load error"));
   size_t len_arg = size_t(state.range(0));
   bool broadcast = bool(state.range(2));
@@ -334,4 +334,4 @@ BENCHMARK_DEFINE_F(DpuBenchFixture, BM_dpu_copy_between_cpu_dpu)
       benchmark::Counter::kIs1024);
 }
 BENCHMARK_REGISTER_F(DpuBenchFixture, BM_dpu_copy_between_cpu_dpu)
-    ->Apply(DpuCopyCpuArgs<MRAM_BUFFER_DWORDS>);
+    ->Apply(DpuCopyCpuArgs<2 * MRAM_BUFFER_DWORDS>);

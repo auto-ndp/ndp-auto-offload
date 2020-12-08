@@ -152,30 +152,30 @@ program_config:
 	.globl	wram_buffer_a
 	.p2align	3
 wram_buffer_a:
-	.zero	8192
-	.size	wram_buffer_a, 8192
+	.zero	24576
+	.size	wram_buffer_a, 24576
 
 	.type	wram_buffer_b,@object   // @wram_buffer_b
 	.globl	wram_buffer_b
 	.p2align	3
 wram_buffer_b:
-	.zero	8192
-	.size	wram_buffer_b, 8192
+	.zero	24576
+	.size	wram_buffer_b, 24576
 
 	.type	mram_buffer_a,@object   // @mram_buffer_a
 	.section	.mram.noinit,"aw",@progbits
 	.globl	mram_buffer_a
 	.p2align	3
 mram_buffer_a:
-	.zero	32768
-	.size	mram_buffer_a, 32768
+	.zero	33554432
+	.size	mram_buffer_a, 33554432
 
 	.type	mram_buffer_b,@object   // @mram_buffer_b
 	.globl	mram_buffer_b
 	.p2align	3
 mram_buffer_b:
-	.zero	32768
-	.size	mram_buffer_b, 32768
+	.zero	33554432
+	.size	mram_buffer_b, 33554432
 
 	.section	.debug_str,"MS",@progbits,1
 .Linfo_string0:
@@ -417,6 +417,15 @@ mram_buffer_b:
 	.byte	0                       // EOM(1)
 	.byte	0                       // EOM(2)
 	.byte	10                      // Abbreviation Code
+	.byte	33                      // DW_TAG_subrange_type
+	.byte	0                       // DW_CHILDREN_no
+	.byte	73                      // DW_AT_type
+	.byte	19                      // DW_FORM_ref4
+	.byte	55                      // DW_AT_count
+	.byte	6                       // DW_FORM_data4
+	.byte	0                       // EOM(1)
+	.byte	0                       // EOM(2)
+	.byte	11                      // Abbreviation Code
 	.byte	46                      // DW_TAG_subprogram
 	.byte	0                       // DW_CHILDREN_no
 	.byte	3                       // DW_AT_name
@@ -431,7 +440,7 @@ mram_buffer_b:
 	.byte	11                      // DW_FORM_data1
 	.byte	0                       // EOM(1)
 	.byte	0                       // EOM(2)
-	.byte	11                      // Abbreviation Code
+	.byte	12                      // Abbreviation Code
 	.byte	46                      // DW_TAG_subprogram
 	.byte	1                       // DW_CHILDREN_yes
 	.byte	3                       // DW_AT_name
@@ -446,7 +455,7 @@ mram_buffer_b:
 	.byte	11                      // DW_FORM_data1
 	.byte	0                       // EOM(1)
 	.byte	0                       // EOM(2)
-	.byte	12                      // Abbreviation Code
+	.byte	13                      // Abbreviation Code
 	.byte	5                       // DW_TAG_formal_parameter
 	.byte	0                       // DW_CHILDREN_no
 	.byte	3                       // DW_AT_name
@@ -459,24 +468,24 @@ mram_buffer_b:
 	.byte	19                      // DW_FORM_ref4
 	.byte	0                       // EOM(1)
 	.byte	0                       // EOM(2)
-	.byte	13                      // Abbreviation Code
+	.byte	14                      // Abbreviation Code
 	.byte	15                      // DW_TAG_pointer_type
 	.byte	0                       // DW_CHILDREN_no
 	.byte	73                      // DW_AT_type
 	.byte	19                      // DW_FORM_ref4
 	.byte	0                       // EOM(1)
 	.byte	0                       // EOM(2)
-	.byte	14                      // Abbreviation Code
+	.byte	15                      // Abbreviation Code
 	.byte	38                      // DW_TAG_const_type
 	.byte	0                       // DW_CHILDREN_no
 	.byte	0                       // EOM(1)
 	.byte	0                       // EOM(2)
-	.byte	15                      // Abbreviation Code
+	.byte	16                      // Abbreviation Code
 	.byte	15                      // DW_TAG_pointer_type
 	.byte	0                       // DW_CHILDREN_no
 	.byte	0                       // EOM(1)
 	.byte	0                       // EOM(2)
-	.byte	16                      // Abbreviation Code
+	.byte	17                      // Abbreviation Code
 	.byte	46                      // DW_TAG_subprogram
 	.byte	1                       // DW_CHILDREN_yes
 	.byte	17                      // DW_AT_low_pc
@@ -499,7 +508,7 @@ mram_buffer_b:
 	.byte	25                      // DW_FORM_flag_present
 	.byte	0                       // EOM(1)
 	.byte	0                       // EOM(2)
-	.byte	17                      // Abbreviation Code
+	.byte	18                      // Abbreviation Code
 	.byte	11                      // DW_TAG_lexical_block
 	.byte	1                       // DW_CHILDREN_yes
 	.byte	17                      // DW_AT_low_pc
@@ -508,7 +517,7 @@ mram_buffer_b:
 	.byte	6                       // DW_FORM_data4
 	.byte	0                       // EOM(1)
 	.byte	0                       // EOM(2)
-	.byte	18                      // Abbreviation Code
+	.byte	19                      // Abbreviation Code
 	.byte	52                      // DW_TAG_variable
 	.byte	0                       // DW_CHILDREN_no
 	.byte	2                       // DW_AT_location
@@ -523,14 +532,14 @@ mram_buffer_b:
 	.byte	19                      // DW_FORM_ref4
 	.byte	0                       // EOM(1)
 	.byte	0                       // EOM(2)
-	.byte	19                      // Abbreviation Code
+	.byte	20                      // Abbreviation Code
 	.byte	11                      // DW_TAG_lexical_block
 	.byte	1                       // DW_CHILDREN_yes
 	.byte	85                      // DW_AT_ranges
 	.byte	23                      // DW_FORM_sec_offset
 	.byte	0                       // EOM(1)
 	.byte	0                       // EOM(2)
-	.byte	20                      // Abbreviation Code
+	.byte	21                      // Abbreviation Code
 	.byte	52                      // DW_TAG_variable
 	.byte	0                       // DW_CHILDREN_no
 	.byte	3                       // DW_AT_name
@@ -543,26 +552,9 @@ mram_buffer_b:
 	.byte	19                      // DW_FORM_ref4
 	.byte	0                       // EOM(1)
 	.byte	0                       // EOM(2)
-	.byte	21                      // Abbreviation Code
-	.byte	29                      // DW_TAG_inlined_subroutine
-	.byte	0                       // DW_CHILDREN_no
-	.byte	49                      // DW_AT_abstract_origin
-	.byte	19                      // DW_FORM_ref4
-	.byte	17                      // DW_AT_low_pc
-	.byte	1                       // DW_FORM_addr
-	.byte	18                      // DW_AT_high_pc
-	.byte	6                       // DW_FORM_data4
-	.byte	88                      // DW_AT_call_file
-	.byte	11                      // DW_FORM_data1
-	.byte	89                      // DW_AT_call_line
-	.byte	11                      // DW_FORM_data1
-	.byte	87                      // DW_AT_call_column
-	.byte	11                      // DW_FORM_data1
-	.byte	0                       // EOM(1)
-	.byte	0                       // EOM(2)
 	.byte	22                      // Abbreviation Code
 	.byte	29                      // DW_TAG_inlined_subroutine
-	.byte	1                       // DW_CHILDREN_yes
+	.byte	0                       // DW_CHILDREN_no
 	.byte	49                      // DW_AT_abstract_origin
 	.byte	19                      // DW_FORM_ref4
 	.byte	17                      // DW_AT_low_pc
@@ -578,6 +570,23 @@ mram_buffer_b:
 	.byte	0                       // EOM(1)
 	.byte	0                       // EOM(2)
 	.byte	23                      // Abbreviation Code
+	.byte	29                      // DW_TAG_inlined_subroutine
+	.byte	1                       // DW_CHILDREN_yes
+	.byte	49                      // DW_AT_abstract_origin
+	.byte	19                      // DW_FORM_ref4
+	.byte	17                      // DW_AT_low_pc
+	.byte	1                       // DW_FORM_addr
+	.byte	18                      // DW_AT_high_pc
+	.byte	6                       // DW_FORM_data4
+	.byte	88                      // DW_AT_call_file
+	.byte	11                      // DW_FORM_data1
+	.byte	89                      // DW_AT_call_line
+	.byte	11                      // DW_FORM_data1
+	.byte	87                      // DW_AT_call_column
+	.byte	11                      // DW_FORM_data1
+	.byte	0                       // EOM(1)
+	.byte	0                       // EOM(2)
+	.byte	24                      // Abbreviation Code
 	.byte	5                       // DW_TAG_formal_parameter
 	.byte	0                       // DW_CHILDREN_no
 	.byte	2                       // DW_AT_location
@@ -594,7 +603,7 @@ mram_buffer_b:
 	.short	4                       // DWARF version number
 	.long	.debug_abbrev           // Offset Into Abbrev. Section
 	.byte	4                       // Address Size (in bytes)
-	.byte	1                       // Abbrev [1] 0xb:0x1fe DW_TAG_compile_unit
+	.byte	1                       // Abbrev [1] 0xb:0x200 DW_TAG_compile_unit
 	.long	.Linfo_string0          // DW_AT_producer
 	.short	12                      // DW_AT_language
 	.long	.Linfo_string1          // DW_AT_name
@@ -665,7 +674,7 @@ mram_buffer_b:
 	.long	113                     // DW_AT_type
 	.byte	8                       // Abbrev [8] 0x9a:0x7 DW_TAG_subrange_type
 	.long	162                     // DW_AT_type
-	.short	2048                    // DW_AT_count
+	.short	6144                    // DW_AT_count
 	.byte	0                       // End Of Children Mark
 	.byte	9                       // Abbrev [9] 0xa2:0x7 DW_TAG_base_type
 	.long	.Linfo_string12         // DW_AT_name
@@ -691,13 +700,13 @@ mram_buffer_b:
 	.byte	5                       // DW_AT_location
 	.byte	3
 	.long	mram_buffer_a
-	.byte	7                       // Abbrev [7] 0xcd:0xd DW_TAG_array_type
+	.byte	7                       // Abbrev [7] 0xcd:0xf DW_TAG_array_type
 	.long	113                     // DW_AT_type
-	.byte	8                       // Abbrev [8] 0xd2:0x7 DW_TAG_subrange_type
+	.byte	10                      // Abbrev [10] 0xd2:0x9 DW_TAG_subrange_type
 	.long	162                     // DW_AT_type
-	.short	8192                    // DW_AT_count
+	.long	8388608                 // DW_AT_count
 	.byte	0                       // End Of Children Mark
-	.byte	2                       // Abbrev [2] 0xda:0x12 DW_TAG_variable
+	.byte	2                       // Abbrev [2] 0xdc:0x12 DW_TAG_variable
 	.long	.Linfo_string15         // DW_AT_name
 	.long	205                     // DW_AT_type
                                         // DW_AT_external
@@ -707,44 +716,44 @@ mram_buffer_b:
 	.byte	5                       // DW_AT_location
 	.byte	3
 	.long	mram_buffer_b
-	.byte	10                      // Abbrev [10] 0xec:0xc DW_TAG_subprogram
+	.byte	11                      // Abbrev [11] 0xee:0xc DW_TAG_subprogram
 	.long	.Linfo_string16         // DW_AT_name
 	.byte	5                       // DW_AT_decl_file
 	.byte	33                      // DW_AT_decl_line
-	.long	248                     // DW_AT_type
+	.long	250                     // DW_AT_type
 	.byte	1                       // DW_AT_inline
-	.byte	5                       // Abbrev [5] 0xf8:0xb DW_TAG_typedef
+	.byte	5                       // Abbrev [5] 0xfa:0xb DW_TAG_typedef
 	.long	124                     // DW_AT_type
 	.long	.Linfo_string17         // DW_AT_name
 	.byte	6                       // DW_AT_decl_file
 	.byte	27                      // DW_AT_decl_line
-	.byte	11                      // Abbrev [11] 0x103:0x2a DW_TAG_subprogram
+	.byte	12                      // Abbrev [12] 0x105:0x2a DW_TAG_subprogram
 	.long	.Linfo_string18         // DW_AT_name
 	.byte	4                       // DW_AT_decl_file
 	.byte	33                      // DW_AT_decl_line
                                         // DW_AT_prototyped
 	.byte	1                       // DW_AT_inline
-	.byte	12                      // Abbrev [12] 0x10b:0xb DW_TAG_formal_parameter
+	.byte	13                      // Abbrev [13] 0x10d:0xb DW_TAG_formal_parameter
 	.long	.Linfo_string19         // DW_AT_name
 	.byte	4                       // DW_AT_decl_file
 	.byte	33                      // DW_AT_decl_line
-	.long	301                     // DW_AT_type
-	.byte	12                      // Abbrev [12] 0x116:0xb DW_TAG_formal_parameter
+	.long	303                     // DW_AT_type
+	.byte	13                      // Abbrev [13] 0x118:0xb DW_TAG_formal_parameter
 	.long	.Linfo_string20         // DW_AT_name
 	.byte	4                       // DW_AT_decl_file
 	.byte	33                      // DW_AT_decl_line
-	.long	307                     // DW_AT_type
-	.byte	12                      // Abbrev [12] 0x121:0xb DW_TAG_formal_parameter
+	.long	309                     // DW_AT_type
+	.byte	13                      // Abbrev [13] 0x123:0xb DW_TAG_formal_parameter
 	.long	.Linfo_string21         // DW_AT_name
 	.byte	4                       // DW_AT_decl_file
 	.byte	33                      // DW_AT_decl_line
 	.long	124                     // DW_AT_type
 	.byte	0                       // End Of Children Mark
-	.byte	13                      // Abbrev [13] 0x12d:0x5 DW_TAG_pointer_type
-	.long	306                     // DW_AT_type
-	.byte	14                      // Abbrev [14] 0x132:0x1 DW_TAG_const_type
-	.byte	15                      // Abbrev [15] 0x133:0x1 DW_TAG_pointer_type
-	.byte	16                      // Abbrev [16] 0x134:0xc8 DW_TAG_subprogram
+	.byte	14                      // Abbrev [14] 0x12f:0x5 DW_TAG_pointer_type
+	.long	308                     // DW_AT_type
+	.byte	15                      // Abbrev [15] 0x134:0x1 DW_TAG_const_type
+	.byte	16                      // Abbrev [16] 0x135:0x1 DW_TAG_pointer_type
+	.byte	17                      // Abbrev [17] 0x136:0xc8 DW_TAG_subprogram
 	.long	.Lfunc_begin0           // DW_AT_low_pc
 	.long	.Lfunc_end0-.Lfunc_begin0 // DW_AT_high_pc
 	.byte	1                       // DW_AT_frame_base
@@ -753,39 +762,39 @@ mram_buffer_b:
 	.long	.Linfo_string22         // DW_AT_name
 	.byte	3                       // DW_AT_decl_file
 	.byte	15                      // DW_AT_decl_line
-	.long	508                     // DW_AT_type
+	.long	510                     // DW_AT_type
                                         // DW_AT_external
-	.byte	17                      // Abbrev [17] 0x149:0x5a DW_TAG_lexical_block
+	.byte	18                      // Abbrev [18] 0x14b:0x5a DW_TAG_lexical_block
 	.long	.Ltmp1                  // DW_AT_low_pc
 	.long	.Ltmp18-.Ltmp1          // DW_AT_high_pc
-	.byte	18                      // Abbrev [18] 0x152:0xf DW_TAG_variable
+	.byte	19                      // Abbrev [19] 0x154:0xf DW_TAG_variable
 	.long	.Ldebug_loc1            // DW_AT_location
 	.long	.Linfo_string25         // DW_AT_name
 	.byte	3                       // DW_AT_decl_file
 	.byte	17                      // DW_AT_decl_line
-	.long	515                     // DW_AT_type
-	.byte	19                      // Abbrev [19] 0x161:0x41 DW_TAG_lexical_block
+	.long	517                     // DW_AT_type
+	.byte	20                      // Abbrev [20] 0x163:0x41 DW_TAG_lexical_block
 	.long	.Ldebug_ranges1         // DW_AT_ranges
-	.byte	18                      // Abbrev [18] 0x166:0xf DW_TAG_variable
+	.byte	19                      // Abbrev [19] 0x168:0xf DW_TAG_variable
 	.long	.Ldebug_loc0            // DW_AT_location
 	.long	.Linfo_string24         // DW_AT_name
 	.byte	3                       // DW_AT_decl_file
 	.byte	18                      // DW_AT_decl_line
 	.long	113                     // DW_AT_type
-	.byte	19                      // Abbrev [19] 0x175:0x2c DW_TAG_lexical_block
+	.byte	20                      // Abbrev [20] 0x177:0x2c DW_TAG_lexical_block
 	.long	.Ldebug_ranges0         // DW_AT_ranges
-	.byte	20                      // Abbrev [20] 0x17a:0xb DW_TAG_variable
+	.byte	21                      // Abbrev [21] 0x17c:0xb DW_TAG_variable
 	.long	.Linfo_string26         // DW_AT_name
 	.byte	3                       // DW_AT_decl_file
 	.byte	20                      // DW_AT_decl_line
-	.long	515                     // DW_AT_type
-	.byte	20                      // Abbrev [20] 0x185:0xb DW_TAG_variable
+	.long	517                     // DW_AT_type
+	.byte	21                      // Abbrev [21] 0x187:0xb DW_TAG_variable
 	.long	.Linfo_string27         // DW_AT_name
 	.byte	3                       // DW_AT_decl_file
 	.byte	21                      // DW_AT_decl_line
-	.long	515                     // DW_AT_type
-	.byte	21                      // Abbrev [21] 0x190:0x10 DW_TAG_inlined_subroutine
-	.long	236                     // DW_AT_abstract_origin
+	.long	517                     // DW_AT_type
+	.byte	22                      // Abbrev [22] 0x192:0x10 DW_TAG_inlined_subroutine
+	.long	238                     // DW_AT_abstract_origin
 	.long	.Ltmp5                  // DW_AT_low_pc
 	.long	.Ltmp6-.Ltmp5           // DW_AT_high_pc
 	.byte	3                       // DW_AT_call_file
@@ -794,46 +803,46 @@ mram_buffer_b:
 	.byte	0                       // End Of Children Mark
 	.byte	0                       // End Of Children Mark
 	.byte	0                       // End Of Children Mark
-	.byte	22                      // Abbrev [22] 0x1a3:0x2c DW_TAG_inlined_subroutine
-	.long	259                     // DW_AT_abstract_origin
+	.byte	23                      // Abbrev [23] 0x1a5:0x2c DW_TAG_inlined_subroutine
+	.long	261                     // DW_AT_abstract_origin
 	.long	.Ltmp18                 // DW_AT_low_pc
 	.long	.Ltmp21-.Ltmp18         // DW_AT_high_pc
 	.byte	3                       // DW_AT_call_file
 	.byte	28                      // DW_AT_call_line
 	.byte	5                       // DW_AT_call_column
-	.byte	23                      // Abbrev [23] 0x1b3:0x9 DW_TAG_formal_parameter
+	.byte	24                      // Abbrev [24] 0x1b5:0x9 DW_TAG_formal_parameter
 	.long	.Ldebug_loc3            // DW_AT_location
-	.long	267                     // DW_AT_abstract_origin
-	.byte	23                      // Abbrev [23] 0x1bc:0x9 DW_TAG_formal_parameter
+	.long	269                     // DW_AT_abstract_origin
+	.byte	24                      // Abbrev [24] 0x1be:0x9 DW_TAG_formal_parameter
 	.long	.Ldebug_loc4            // DW_AT_location
-	.long	278                     // DW_AT_abstract_origin
-	.byte	23                      // Abbrev [23] 0x1c5:0x9 DW_TAG_formal_parameter
+	.long	280                     // DW_AT_abstract_origin
+	.byte	24                      // Abbrev [24] 0x1c7:0x9 DW_TAG_formal_parameter
 	.long	.Ldebug_loc2            // DW_AT_location
-	.long	289                     // DW_AT_abstract_origin
+	.long	291                     // DW_AT_abstract_origin
 	.byte	0                       // End Of Children Mark
-	.byte	22                      // Abbrev [22] 0x1cf:0x2c DW_TAG_inlined_subroutine
-	.long	259                     // DW_AT_abstract_origin
+	.byte	23                      // Abbrev [23] 0x1d1:0x2c DW_TAG_inlined_subroutine
+	.long	261                     // DW_AT_abstract_origin
 	.long	.Ltmp21                 // DW_AT_low_pc
 	.long	.Ltmp24-.Ltmp21         // DW_AT_high_pc
 	.byte	3                       // DW_AT_call_file
 	.byte	29                      // DW_AT_call_line
 	.byte	5                       // DW_AT_call_column
-	.byte	23                      // Abbrev [23] 0x1df:0x9 DW_TAG_formal_parameter
+	.byte	24                      // Abbrev [24] 0x1e1:0x9 DW_TAG_formal_parameter
 	.long	.Ldebug_loc6            // DW_AT_location
-	.long	267                     // DW_AT_abstract_origin
-	.byte	23                      // Abbrev [23] 0x1e8:0x9 DW_TAG_formal_parameter
+	.long	269                     // DW_AT_abstract_origin
+	.byte	24                      // Abbrev [24] 0x1ea:0x9 DW_TAG_formal_parameter
 	.long	.Ldebug_loc7            // DW_AT_location
-	.long	278                     // DW_AT_abstract_origin
-	.byte	23                      // Abbrev [23] 0x1f1:0x9 DW_TAG_formal_parameter
+	.long	280                     // DW_AT_abstract_origin
+	.byte	24                      // Abbrev [24] 0x1f3:0x9 DW_TAG_formal_parameter
 	.long	.Ldebug_loc5            // DW_AT_location
-	.long	289                     // DW_AT_abstract_origin
+	.long	291                     // DW_AT_abstract_origin
 	.byte	0                       // End Of Children Mark
 	.byte	0                       // End Of Children Mark
-	.byte	6                       // Abbrev [6] 0x1fc:0x7 DW_TAG_base_type
+	.byte	6                       // Abbrev [6] 0x1fe:0x7 DW_TAG_base_type
 	.long	.Linfo_string23         // DW_AT_name
 	.byte	5                       // DW_AT_encoding
 	.byte	4                       // DW_AT_byte_size
-	.byte	13                      // Abbrev [13] 0x203:0x5 DW_TAG_pointer_type
+	.byte	14                      // Abbrev [14] 0x205:0x5 DW_TAG_pointer_type
 	.long	113                     // DW_AT_type
 	.byte	0                       // End Of Children Mark
 .Ldebug_info_end0:
