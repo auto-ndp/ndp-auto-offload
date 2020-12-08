@@ -16,6 +16,11 @@ endif()
 
 add_subdirectory(vendor/benchmark)
 
+set(BUILD_GMOCK OFF CACHE BOOL "-" FORCE)
+set(INSTALL_GTEST OFF CACHE BOOL "-" FORCE)
+set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "-" FORCE)
+set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "-" FORCE)
+
 set(exe_sources
   src/memspeed.cpp
   src/cpuonly.cpp

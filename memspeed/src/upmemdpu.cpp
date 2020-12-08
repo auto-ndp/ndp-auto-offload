@@ -252,7 +252,7 @@ public:
     DPU_ASSERT(dpu_free(this->dpu_set));
   }
 
-  static const std::vector<uint32_t>& dpu_counts() {
+  static const std::vector<uint32_t> &dpu_counts() {
     static std::vector<uint32_t> v = []() {
       std::vector<uint32_t> vv;
       dpu_set_t dpuset;
@@ -270,61 +270,68 @@ public:
   }
 };
 
-template<uint32_t MaxMemArg>
-static void DpuArgsMemsizeDpucount(benchmark::internal::Benchmark* b) {
-  b->ArgNames({"dwords", "dpus"});
-  for(uint32_t mem_arg = 8; mem_arg <= MaxMemArg; mem_arg*=2) {
-    for(const auto dpu_count: DpuBenchFixture::dpu_counts()) {
-      b->Args({mem_arg, dpu_count});
+template <uint32_t MaxMemArg>
+static void DpuCopyCpuArgs(benchmark::internal::Benchmark *b) {
+  b->ArgNames({"dwords", "dpus", "broadcast", "to_dpu", "mram"});
+  for (uint32_t mem_arg = 2; mem_arg <= MaxMemArg; mem_arg *= 2)
+    for (const auto dpu_count : DpuBenchFixture::dpu_counts())
+      for (const auto broadcast : {0, 1})
+        for (const auto mram : {0, 1}) {
+          if (!mram && mem_arg > WRAM_BUFFER_DWORDS) {
+            continue;
+          }
+          b->Args({mem_arg, dpu_count, broadcast, 1, mram});
+          if (!broadcast) { // allow only non-broadcast reads
+            b->Args({mem_arg, dpu_count, broadcast, 0, mram});
+          }
+        }
+}
+
+BENCHMARK_DEFINE_F(DpuBenchFixture, BM_dpu_copy_between_cpu_dpu)
+(benchmark::State &state) {
+  DPU_CHECK(dpu_load(dpu_set, "../dpusrc/ramcopy.dpuelf", nullptr),
+            throw std::runtime_error("DPU load error"));
+  size_t len_arg = size_t(state.range(0));
+  bool broadcast = bool(state.range(2));
+  bool to_dpu = bool(state.range(3));
+  bool use_mram = bool(state.range(4));
+  const char *target_symbol_name = use_mram ? "mram_buffer_a" : "wram_buffer_a";
+  size_t total_len = broadcast ? len_arg : len_arg * dpu_count;
+  MmapArray<uint32_t> cpubuf{total_len};
+  std::minstd_rand rnd; // fast RNG
+  rnd.seed(2817398);
+  std::generate_n(cpubuf.data(), cpubuf.size(), rnd);
+  if (broadcast) {
+    for (auto _ : state) {
+      DPU_CHECK(dpu_broadcast_to(dpu_set, target_symbol_name, 0, cpubuf.data(),
+                                 cpubuf.size_in_bytes(), DPU_XFER_DEFAULT),
+                throw std::runtime_error("DPU broadcast error"));
+      benchmark::ClobberMemory();
+    }
+  } else {
+    for (auto _ : state) {
+      dpu_set_t dpu;
+      uint32_t dpu_id;
+      DPU_FOREACH(this->dpu_set, dpu, dpu_id) {
+        DPU_CHECK(dpu_prepare_xfer(dpu, &cpubuf[dpu_id * len_arg]),
+                  throw std::runtime_error("DPU prepare xfer error"));
+      }
+      DPU_CHECK(dpu_push_xfer(dpu_set,
+                              to_dpu ? DPU_XFER_TO_DPU : DPU_XFER_FROM_DPU,
+                              target_symbol_name, 0, len_arg * sizeof(uint32_t),
+                              DPU_XFER_DEFAULT),
+                throw std::runtime_error("DPU push xfer error"));
+      benchmark::ClobberMemory();
     }
   }
-}
-
-BENCHMARK_DEFINE_F(DpuBenchFixture, BM_dpu_copy_cpu_to_wram_broadcast)(benchmark::State &state) {
-  DPU_ASSERT(dpu_load(dpu_set, "../dpusrc/ramcopy.dpuelf", nullptr));
-  size_t len_arg = size_t(state.range(0));
-  MmapArray<uint32_t> cpubuf{len_arg};
-  std::minstd_rand rnd; // fast RNG
-  rnd.seed(2817398);
-  std::generate_n(cpubuf.data(), cpubuf.size(), rnd);
-  for (auto _ : state) {
-    DPU_ASSERT(dpu_broadcast_to(dpu_set, "wram_buffer_a", 0,
-                                    cpubuf.data(), cpubuf.size(),
-                                    DPU_XFER_DEFAULT));
-    benchmark::ClobberMemory();
-  }
   state.SetBytesProcessed(int64_t(state.iterations()) *
                           int64_t(cpubuf.size_in_bytes()));
   state.counters["memused"] = benchmark::Counter(
-      double(cpubuf.size_in_bytes()),
-      benchmark::Counter::Flags::kDefaults, benchmark::Counter::kIs1024);
+      double(cpubuf.size_in_bytes()), benchmark::Counter::Flags::kDefaults,
+      benchmark::Counter::kIs1024);
   state.counters["dpu_ranks"] = benchmark::Counter(
-      double(dpu_rank_count),
-      benchmark::Counter::Flags::kDefaults, benchmark::Counter::kIs1024);
+      double(dpu_rank_count), benchmark::Counter::Flags::kDefaults,
+      benchmark::Counter::kIs1024);
 }
-BENCHMARK_REGISTER_F(DpuBenchFixture, BM_dpu_copy_cpu_to_wram_broadcast)->Apply(DpuArgsMemsizeDpucount<WRAM_BUFFER_DWORDS>);
-
-BENCHMARK_DEFINE_F(DpuBenchFixture, BM_dpu_copy_cpu_to_mram_broadcast)(benchmark::State &state) {
-  DPU_ASSERT(dpu_load(dpu_set, "../dpusrc/ramcopy.dpuelf", nullptr));
-  size_t len_arg = size_t(state.range(0));
-  MmapArray<uint32_t> cpubuf{len_arg};
-  std::minstd_rand rnd; // fast RNG
-  rnd.seed(2817398);
-  std::generate_n(cpubuf.data(), cpubuf.size(), rnd);
-  for (auto _ : state) {
-    DPU_ASSERT(dpu_broadcast_to(dpu_set, "mram_buffer_a", 0,
-                                    cpubuf.data(), cpubuf.size(),
-                                    DPU_XFER_DEFAULT));
-    benchmark::ClobberMemory();
-  }
-  state.SetBytesProcessed(int64_t(state.iterations()) *
-                          int64_t(cpubuf.size_in_bytes()));
-  state.counters["memused"] = benchmark::Counter(
-      double(cpubuf.size_in_bytes()),
-      benchmark::Counter::Flags::kDefaults, benchmark::Counter::kIs1024);
-  state.counters["dpu_ranks"] = benchmark::Counter(
-      double(dpu_rank_count),
-      benchmark::Counter::Flags::kDefaults, benchmark::Counter::kIs1024);
-}
-BENCHMARK_REGISTER_F(DpuBenchFixture, BM_dpu_copy_cpu_to_mram_broadcast)->Apply(DpuArgsMemsizeDpucount<MRAM_BUFFER_DWORDS>);
-
+BENCHMARK_REGISTER_F(DpuBenchFixture, BM_dpu_copy_between_cpu_dpu)
+    ->Apply(DpuCopyCpuArgs<MRAM_BUFFER_DWORDS>);
