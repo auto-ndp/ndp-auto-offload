@@ -5,8 +5,8 @@
 // SRAM (Data CCM)
 #define COPYMODE_WRAM 2
 
-#define MRAM_BUFFER_DWORDS 8192
-#define WRAM_BUFFER_DWORDS 2048
+#define MRAM_BUFFER_DWORDS 8388608
+#define WRAM_BUFFER_DWORDS 6144
 
 struct dpuramcopy_config_t {
   uint32_t cfg_copy_mode;

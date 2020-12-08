@@ -15,8 +15,14 @@ extern "C" {
 #include <dpu.h>
 }
 
+#include <benchmark/benchmark.h>
+
 using namespace std::string_literals;
 using namespace std::chrono;
+
+constexpr size_t WRAM_TOTAL_BYTES = 64 * 1024;
+constexpr size_t IRAM_TOTAL_BYTES = 24 * 1024;
+constexpr size_t MRAM_TOTAL_BYTES = 64 * 1024 * 1024;
 
 class UpmemDpuBenchmark : public MemspeedBenchmark {
 public:
@@ -223,3 +229,102 @@ private:
 std::shared_ptr<MemspeedBenchmark> make_upmemdpu_benchmark() {
   return std::make_shared<UpmemDpuBenchmark>();
 }
+
+class DpuBenchFixture : public benchmark::Fixture {
+public:
+  dpu_set_t dpu_set;
+  uint32_t dpu_count, dpu_rank_count;
+
+  using benchmark::Fixture::SetUp;
+  using benchmark::Fixture::TearDown;
+
+  virtual void SetUp(const ::benchmark::State &state) override {
+    dpu_counts();
+    dpu_count = uint32_t(state.range(1));
+    DPU_ASSERT(
+        dpu_alloc((this->dpu_count == 0) ? DPU_ALLOCATE_ALL : this->dpu_count,
+                  nullptr, &this->dpu_set));
+    DPU_ASSERT(dpu_get_nr_dpus(this->dpu_set, &this->dpu_count));
+    DPU_ASSERT(dpu_get_nr_ranks(this->dpu_set, &this->dpu_rank_count));
+  }
+
+  virtual void TearDown(const ::benchmark::State &_state) override {
+    DPU_ASSERT(dpu_free(this->dpu_set));
+  }
+
+  static const std::vector<uint32_t>& dpu_counts() {
+    static std::vector<uint32_t> v = []() {
+      std::vector<uint32_t> vv;
+      dpu_set_t dpuset;
+      uint32_t dpucount;
+      DPU_ASSERT(dpu_alloc(DPU_ALLOCATE_ALL, nullptr, &dpuset));
+      DPU_ASSERT(dpu_get_nr_dpus(dpuset, &dpucount));
+      DPU_ASSERT(dpu_free(dpuset));
+      std::cerr << "DPUs available on the system: " << dpucount << std::endl;
+      for (uint32_t n = 1; n <= dpucount; n *= 2) {
+        vv.push_back(n);
+      }
+      return vv;
+    }();
+    return v;
+  }
+};
+
+template<uint32_t MaxMemArg>
+static void DpuArgsMemsizeDpucount(benchmark::internal::Benchmark* b) {
+  b->ArgNames({"dwords", "dpus"});
+  for(uint32_t mem_arg = 8; mem_arg <= MaxMemArg; mem_arg*=2) {
+    for(const auto dpu_count: DpuBenchFixture::dpu_counts()) {
+      b->Args({mem_arg, dpu_count});
+    }
+  }
+}
+
+BENCHMARK_DEFINE_F(DpuBenchFixture, BM_dpu_copy_cpu_to_wram_broadcast)(benchmark::State &state) {
+  DPU_ASSERT(dpu_load(dpu_set, "../dpusrc/ramcopy.dpuelf", nullptr));
+  size_t len_arg = size_t(state.range(0));
+  MmapArray<uint32_t> cpubuf{len_arg};
+  std::minstd_rand rnd; // fast RNG
+  rnd.seed(2817398);
+  std::generate_n(cpubuf.data(), cpubuf.size(), rnd);
+  for (auto _ : state) {
+    DPU_ASSERT(dpu_broadcast_to(dpu_set, "wram_buffer_a", 0,
+                                    cpubuf.data(), cpubuf.size(),
+                                    DPU_XFER_DEFAULT));
+    benchmark::ClobberMemory();
+  }
+  state.SetBytesProcessed(int64_t(state.iterations()) *
+                          int64_t(cpubuf.size_in_bytes()));
+  state.counters["memused"] = benchmark::Counter(
+      double(cpubuf.size_in_bytes()),
+      benchmark::Counter::Flags::kDefaults, benchmark::Counter::kIs1024);
+  state.counters["dpu_ranks"] = benchmark::Counter(
+      double(dpu_rank_count),
+      benchmark::Counter::Flags::kDefaults, benchmark::Counter::kIs1024);
+}
+BENCHMARK_REGISTER_F(DpuBenchFixture, BM_dpu_copy_cpu_to_wram_broadcast)->Apply(DpuArgsMemsizeDpucount<WRAM_BUFFER_DWORDS>);
+
+BENCHMARK_DEFINE_F(DpuBenchFixture, BM_dpu_copy_cpu_to_mram_broadcast)(benchmark::State &state) {
+  DPU_ASSERT(dpu_load(dpu_set, "../dpusrc/ramcopy.dpuelf", nullptr));
+  size_t len_arg = size_t(state.range(0));
+  MmapArray<uint32_t> cpubuf{len_arg};
+  std::minstd_rand rnd; // fast RNG
+  rnd.seed(2817398);
+  std::generate_n(cpubuf.data(), cpubuf.size(), rnd);
+  for (auto _ : state) {
+    DPU_ASSERT(dpu_broadcast_to(dpu_set, "mram_buffer_a", 0,
+                                    cpubuf.data(), cpubuf.size(),
+                                    DPU_XFER_DEFAULT));
+    benchmark::ClobberMemory();
+  }
+  state.SetBytesProcessed(int64_t(state.iterations()) *
+                          int64_t(cpubuf.size_in_bytes()));
+  state.counters["memused"] = benchmark::Counter(
+      double(cpubuf.size_in_bytes()),
+      benchmark::Counter::Flags::kDefaults, benchmark::Counter::kIs1024);
+  state.counters["dpu_ranks"] = benchmark::Counter(
+      double(dpu_rank_count),
+      benchmark::Counter::Flags::kDefaults, benchmark::Counter::kIs1024);
+}
+BENCHMARK_REGISTER_F(DpuBenchFixture, BM_dpu_copy_cpu_to_mram_broadcast)->Apply(DpuArgsMemsizeDpucount<MRAM_BUFFER_DWORDS>);
+
