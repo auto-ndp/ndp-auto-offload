@@ -11,6 +11,8 @@
 #include <x86intrin.h>
 #endif
 #include <ctime>
+#include <cstdlib>
+#include <sys/mman.h>
 
 inline bool ends_with(std::string sv, char c) {
   return (sv.length() > 0) && (sv.back() == c);
@@ -35,8 +37,6 @@ public:
 };
 
 using benchmark_ptr_t = std::shared_ptr<MemspeedBenchmark>;
-
-std::vector<benchmark_ptr_t> memspeed_benchmarks();
 
 inline size_t parseSize(std::string szstr) {
   size_t raw_size = static_cast<size_t>(strtoull(szstr.c_str(), nullptr, 0));
@@ -93,3 +93,38 @@ inline uint64_t get_cpu_tsc() {
   return static_cast<uint64_t>(ts.tv_nsec) +
          1000000000ULL * static_cast<uint64_t>(ts.tv_sec);
 }
+
+template<class T>
+struct MmapArray {
+private:
+  T* ptr = nullptr;
+  size_t length;
+  size_t bytes;
+public:
+  MmapArray(size_t N) {
+    this->length = N;
+    this->bytes = N * sizeof(T);
+    void* mmres = mmap(nullptr, this->bytes, PROT_READ | PROT_WRITE,
+             MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
+    if (mmres == MAP_FAILED || mmres == nullptr) {
+      perror("Couldn't allocate mmap array");
+      exit(1);
+    }
+    this->ptr = static_cast<T *>(mmres);
+  }
+  ~MmapArray() {
+    if (ptr != nullptr && ptr != MAP_FAILED) {
+      munmap(static_cast<void *>(ptr), this->bytes);
+      ptr = nullptr;
+    }
+  }
+  MmapArray(MmapArray&) = delete;
+  MmapArray(MmapArray&&) = delete;
+  MmapArray& operator=(MmapArray&) = delete;
+  T& operator[](size_t idx) {
+    return this->ptr[idx];
+  }
+  T* data() {return this->ptr;}
+  size_t size() {return this->length;}
+  size_t size_in_bytes() {return this->bytes;}
+};
