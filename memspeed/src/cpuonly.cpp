@@ -9,6 +9,8 @@
 #include <random>
 #include <sys/mman.h>
 
+#include <benchmark/benchmark.h>
+
 using namespace std::string_literals;
 
 class CpuOnlyBenchmark : public MemspeedBenchmark {
@@ -155,3 +157,8 @@ private:
 std::shared_ptr<MemspeedBenchmark> make_cpuonly_benchmark() {
   return std::make_shared<CpuOnlyBenchmark>();
 }
+
+static void BM_cpu_memcopy(benchmark::State& state) {
+  //
+}
+BENCHMARK(BM_cpu_memcopy);

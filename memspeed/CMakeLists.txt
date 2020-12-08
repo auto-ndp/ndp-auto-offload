@@ -14,9 +14,10 @@ if(PROJECT_SOURCE_DIR STREQUAL PROJECT_BINARY_DIR)
   message(FATAL_ERROR "In-source builds not allowed. Please make a new directory (called a build directory) and run CMake from there.\n")
 endif()
 
+add_subdirectory(vendor/benchmark)
+
 set(exe_sources
   src/memspeed.cpp
-  src/benchmarks.cpp
   src/cpuonly.cpp
 )
 
@@ -30,6 +31,7 @@ endif()
 add_executable(${PROJECT_NAME} ${exe_sources})
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
 target_compile_definitions(${PROJECT_NAME} PUBLIC ${cpp_defines})
+target_link_libraries(${PROJECT_NAME} benchmark::benchmark)
 
 if(ENABLE_UPMEM_DPU)
   target_include_directories(${PROJECT_NAME} PUBLIC /usr/include/dpu)
