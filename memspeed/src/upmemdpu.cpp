@@ -335,7 +335,7 @@ BENCHMARK_DEFINE_F(DpuBenchFixture, BM_dpu_copy_between_cpu_dpu)
       benchmark::Counter::kIs1024);
 }
 BENCHMARK_REGISTER_F(DpuBenchFixture, BM_dpu_copy_between_cpu_dpu)
-    ->Apply(DpuCopyCpuArgs<2 * MRAM_BUFFER_DWORDS>);
+    ->Apply(DpuCopyCpuArgs<2 * MRAM_BUFFER_DWORDS>)->UseRealTime();
 
 template <int32_t MaxMemArg>
 static void DpuCopyDpuArgs(benchmark::internal::Benchmark *b) {
@@ -397,4 +397,4 @@ BENCHMARK_DEFINE_F(DpuBenchFixture, BM_dpu_copy_within)
       benchmark::Counter::kIs1024);
 }
 BENCHMARK_REGISTER_F(DpuBenchFixture, BM_dpu_copy_within)
-    ->Apply(DpuCopyDpuArgs<WRAM_BUFFER_DWORDS>);
+    ->Apply(DpuCopyDpuArgs<WRAM_BUFFER_DWORDS>)->UseRealTime();
