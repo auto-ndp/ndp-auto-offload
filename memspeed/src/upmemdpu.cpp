@@ -397,4 +397,4 @@ BENCHMARK_DEFINE_F(DpuBenchFixture, BM_dpu_copy_within)
       benchmark::Counter::kIs1024);
 }
 BENCHMARK_REGISTER_F(DpuBenchFixture, BM_dpu_copy_within)
-    ->Apply(DpuCopyDpuArgs<WRAM_BUFFER_DWORDS>)->UseRealTime();
+    ->Apply(DpuCopyDpuArgs<MRAM_BUFFER_DWORDS>)->UseRealTime();
