@@ -8,7 +8,7 @@
 #include <iostream>
 #include <memory>
 #include <random>
-#include <sys/mman.h>
+#include <sstream>
 
 extern "C" {
 #include "../include/dpuramcopy.h"
@@ -249,6 +249,7 @@ public:
   }
 
   virtual void TearDown(const ::benchmark::State &_state) override {
+    (void)_state;
     DPU_ASSERT(dpu_free(this->dpu_set));
   }
 
@@ -289,7 +290,7 @@ static void DpuCopyCpuArgs(benchmark::internal::Benchmark *b) {
 
 BENCHMARK_DEFINE_F(DpuBenchFixture, BM_dpu_copy_between_cpu_dpu)
 (benchmark::State &state) {
-  DPU_CHECK(dpu_load(dpu_set, "../dpusrc/cpucopy.dpuelf", nullptr),
+  DPU_CHECK(dpu_load(dpu_set, "../dpubin/cpucopy.dpuelf", nullptr),
             throw std::runtime_error("DPU load error"));
   size_t len_arg = size_t(state.range(0));
   bool broadcast = bool(state.range(2));
@@ -335,3 +336,65 @@ BENCHMARK_DEFINE_F(DpuBenchFixture, BM_dpu_copy_between_cpu_dpu)
 }
 BENCHMARK_REGISTER_F(DpuBenchFixture, BM_dpu_copy_between_cpu_dpu)
     ->Apply(DpuCopyCpuArgs<2 * MRAM_BUFFER_DWORDS>);
+
+template <int32_t MaxMemArg>
+static void DpuCopyDpuArgs(benchmark::internal::Benchmark *b) {
+  b->ArgNames({"dwords", "dpus", "dpu_reps", "dpu_threads", "mram"});
+  for (int32_t mem_arg = 2; mem_arg <= MaxMemArg; mem_arg *= 2)
+    for (const auto dpu_count : DpuBenchFixture::dpu_counts())
+      for (uint32_t dpu_reps = 1; dpu_reps < 256; dpu_reps *= 8)
+        for (int32_t dpu_threads : {1, 2, 4, 8, 12, 16, 24})
+          if (dpu_threads <= mem_arg) {
+            b->Args({mem_arg, dpu_count, dpu_reps, dpu_threads, 1});
+            if (mem_arg <= WRAM_BUFFER_DWORDS) {
+              b->Args({mem_arg, dpu_count, dpu_reps, dpu_threads, 0});
+            }
+          }
+}
+
+BENCHMARK_DEFINE_F(DpuBenchFixture, BM_dpu_copy_within)
+(benchmark::State &state) {
+  bool use_mram = bool(state.range(4));
+  uint32_t dpu_threads = uint32_t(state.range(3));
+  std::stringstream fname;
+  fname << (use_mram ? "../dpubin/mramcopy." : "../dpubin/wramcopy.")
+        << dpu_threads << ".dpuelf";
+  DPU_CHECK(dpu_load(dpu_set, fname.str().c_str(), nullptr),
+            throw std::runtime_error("DPU load error"));
+  size_t len_arg = size_t(state.range(0));
+  uint32_t in_dpu_reps = uint32_t(state.range(2));
+  MmapArray<uint32_t> cpubuf{len_arg * 2};
+  std::minstd_rand rnd; // fast RNG
+  rnd.seed(2817398);
+  std::generate_n(cpubuf.data(), cpubuf.size(), rnd);
+  DPU_CHECK(dpu_broadcast_to(dpu_set, "buffer_a", 0, cpubuf.data(),
+                             cpubuf.size_in_bytes() / 2, DPU_XFER_DEFAULT),
+            throw std::runtime_error("DPU broadcast error"));
+  DPU_CHECK(dpu_broadcast_to(dpu_set, "buffer_b", 0,
+                             cpubuf.data() + cpubuf.size_in_bytes() / 2,
+                             cpubuf.size_in_bytes() / 2, DPU_XFER_DEFAULT),
+            throw std::runtime_error("DPU broadcast error"));
+  DPU_CHECK(dpu_broadcast_to(dpu_set, "run_repetitions", 0, &in_dpu_reps, 4,
+                             DPU_XFER_DEFAULT),
+            throw std::runtime_error("DPU broadcast error"));
+  uint32_t len_arg_u32 = uint32_t(len_arg);
+  DPU_CHECK(dpu_broadcast_to(dpu_set, "copy_words_amount", 0, &len_arg_u32, 4,
+                             DPU_XFER_DEFAULT),
+            throw std::runtime_error("DPU broadcast error"));
+  for (auto _ : state) {
+    DPU_CHECK(dpu_launch(dpu_set, DPU_SYNCHRONOUS),
+              throw std::runtime_error("DPU launch error"));
+    benchmark::ClobberMemory();
+  }
+  state.SetBytesProcessed(int64_t(state.iterations()) *
+                          int64_t(cpubuf.size_in_bytes() / 2) *
+                          int64_t(in_dpu_reps));
+  state.counters["memused"] = benchmark::Counter(
+      double(cpubuf.size_in_bytes()), benchmark::Counter::Flags::kDefaults,
+      benchmark::Counter::kIs1024);
+  state.counters["dpu_ranks"] = benchmark::Counter(
+      double(dpu_rank_count), benchmark::Counter::Flags::kDefaults,
+      benchmark::Counter::kIs1024);
+}
+BENCHMARK_REGISTER_F(DpuBenchFixture, BM_dpu_copy_within)
+    ->Apply(DpuCopyDpuArgs<WRAM_BUFFER_DWORDS>);
