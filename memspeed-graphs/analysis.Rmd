@@ -1,0 +1,80 @@
+---
+title: "CPU and DPU memory performance analysis"
+author: "Jakub Szewczyk"
+date: "10/12/2020"
+output:
+  html_document:
+    toc: TRUE
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(tidyjson)
+knitr::opts_chunk$set(
+  echo = FALSE
+)
+```
+
+```{r read_json, include=FALSE, cache=TRUE, cache.extra = file.info("combined.json")}
+raw_json <- tidyjson::read_json("combined.json")
+bench_meta <- raw_json %>% enter_object(context) %>% spread_all %>% transpose %>% simplify_all %>% `[[`(1)
+bench_raw <- raw_json %>% enter_object(benchmarks) %>% gather_array %>% spread_all
+```
+
+```{r tidy_bench}
+# Benchmark names:
+# BM_cpu_memcopy/4
+# BM_cpu_memread_linear/4
+# BM_cpu_memread_listwalk/134217728
+# DpuBenchFixture/BM_dpu_copy_between_cpu_dpu/dwords:2/dpus:8/broadcast:0/to_dpu:0/mram:1/real_time
+# DpuBenchFixture/BM_dpu_copy_within/dwords:1024/dpus:8/dpu_reps:64/dpu_threads:12/mram:1/real_time
+
+t_cpu_memcopy <- bench_raw %>%
+  filter(str_detect(name, "^BM_cpu_memcopy/")) %>%
+  select(name, iterations, cpu_time, bytes_per_second, memused) %>%
+  extract(name, into=c("dwords"), regex = "BM_cpu_memcopy/([0-9]+)", remove=TRUE, convert = TRUE)
+
+t_cpu_memread_linear <- bench_raw %>%
+  filter(str_detect(name, "^BM_cpu_memread_linear/")) %>%
+  select(name, iterations, cpu_time, bytes_per_second, memused) %>%
+  extract(name, into=c("dwords"), regex = "BM_cpu_memread_linear/([0-9]+)", remove=TRUE, convert = TRUE)
+
+t_cpu_memread_listwalk <- bench_raw %>%
+  filter(str_detect(name, "^BM_cpu_memread_listwalk/")) %>%
+  select(name, iterations, cpu_time, bytes_per_second, memused) %>%
+  extract(name, into=c("dwords"), regex = "BM_cpu_memread_listwalk/([0-9]+)", remove=TRUE, convert = TRUE)
+
+```
+
+## Benchmark metadata
+
+The benchmarks were run on a `r bench_meta$num_cpus`-core `r bench_meta$mhz_per_cpu` MHz CPU.
+
+## Reference point: CPU memory bandwidth
+
+```{r plot_cpu_memcopy}
+ggplot(t_cpu_memcopy) +
+  geom_point(mapping = aes(x = dwords*4.0, y = bytes_per_second/(1024^3))) +
+  scale_x_continuous(trans = 'log2', n.breaks = 8) +
+  labs(title="Speed of a simple memory copy showing cache size influence") +
+  xlab("Bytes copied") + ylab("GB/s")
+```
+
+```{r plot_cpu_linwalk}
+ggplot(t_cpu_memread_linear) +
+  geom_point(mapping = aes(x = dwords*4.0, y = bytes_per_second/(1024^3))) +
+  scale_x_continuous(trans = 'log2', n.breaks = 8) +
+  labs(title="Memory read (linear) speed") +
+  xlab("Bytes read") + ylab("GB/s")
+```
+
+```{r plot_cpu_listwalk}
+ggplot(t_cpu_memread_listwalk) +
+  geom_point(mapping = aes(x = dwords*4.0, y = bytes_per_second/(1024^3))) +
+  scale_x_continuous(trans = 'log2', n.breaks = 8) +
+  labs(title="Memory read (listwalk) speed") +
+  xlab("Bytes read") + ylab("GB/s")
+```
+
+
+
