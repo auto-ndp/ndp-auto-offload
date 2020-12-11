@@ -3,8 +3,10 @@ title: "CPU and DPU memory performance analysis"
 author: "Jakub Szewczyk"
 date: "10/12/2020"
 output:
+  pdf_document:
+    toc: yes
   html_document:
-    toc: TRUE
+    toc: yes
 ---
 
 ```{r setup, include=FALSE}
@@ -35,7 +37,7 @@ t_cpu_memcopy <- bench_raw %>%
   extract(
     name,
     into = c("dwords"),
-    regex = "BM_cpu_memcopy/([0-9]+)",
+    regex = "^BM_cpu_memcopy/([0-9]+)",
     remove = TRUE,
     convert = TRUE
   )
@@ -46,7 +48,7 @@ t_cpu_memread_linear <- bench_raw %>%
   extract(
     name,
     into = c("dwords"),
-    regex = "BM_cpu_memread_linear/([0-9]+)",
+    regex = "^BM_cpu_memread_linear/([0-9]+)",
     remove = TRUE,
     convert = TRUE
   )
@@ -57,9 +59,46 @@ t_cpu_memread_listwalk <- bench_raw %>%
   extract(
     name,
     into = c("dwords"),
-    regex = "BM_cpu_memread_listwalk/([0-9]+)",
+    regex = "^BM_cpu_memread_listwalk/([0-9]+)",
     remove = TRUE,
     convert = TRUE
+  )
+
+t_cpu_dpu_copy <- bench_raw %>%
+  filter(str_detect(name, "^DpuBenchFixture/BM_dpu_copy_between_cpu_dpu/")) %>%
+  select(name, iterations, cpu_time, real_time, bytes_per_second, memused, dpu_ranks) %>%
+  extract(
+    name,
+    into = c("dwords", "dpus", "broadcast", "to_dpu", "mram"),
+    regex = "^DpuBenchFixture/BM_dpu_copy_between_cpu_dpu/dwords:([0-9]+)/dpus:([0-9]+)/broadcast:([01])/to_dpu:([01])/mram:([01])/real_time",
+    remove = TRUE,
+    convert = TRUE
+  ) %>%
+  unite(direction, broadcast, to_dpu, sep=";") %>%
+  mutate(
+    direction = factor(direction, levels=c("0;0", "0;1", "1;1"), labels=c("Read from all", "Write N->N", "Broadcast 1->N")),
+    mram = factor(mram, levels=c("0", "1"), labels=c("WRAM", "MRAM")),
+    dpu_ranks = factor(dpu_ranks),
+    dpus = factor(dpus)
+  )
+
+t_dpu_copy <- bench_raw %>%
+  filter(str_detect(name, "^DpuBenchFixture/BM_dpu_copy_within/")) %>%
+  select(name, iterations, cpu_time, real_time, bytes_per_second, dpu_ranks) %>%
+  extract(
+    name,
+    into = c("dwords", "dpus", "dpu_reps", "dpu_threads", "mram"),
+    regex = "^DpuBenchFixture/BM_dpu_copy_within/dwords:([0-9]+)/dpus:([0-9]+)/dpu_reps:([0-9]+)/dpu_threads:([0-9]+)/mram:([01])/real_time",
+    remove = TRUE,
+    convert = TRUE
+  ) %>%
+  mutate(
+    memused = 4*dwords,
+    dpu_batch_size = dpu_reps*4*dwords,
+    mram = factor(mram, levels=c("0", "1"), labels=c("WRAM", "MRAM")),
+    dpu_ranks = factor(dpu_ranks),
+    dpus = factor(dpus),
+    dpu_reps = factor(dpu_reps)
   )
 
 ```
@@ -70,32 +109,160 @@ The benchmarks were run on a `r bench_meta$num_cpus`-core `r bench_meta$mhz_per_
 
 ## Reference point: CPU memory bandwidth
 
+For reference here are the cache sizes for the CPU:
+```{r cpu_cache_info}
+bench_meta %>% enter_object("caches") %>% gather_array() %>% spread_all %>%
+  as_tibble() %>%
+  select(type, level, size, num_sharing) %>%
+  mutate(size = scales::label_bytes(units = "auto_binary")(size)) %>%
+  knitr::kable(col.names = c("Type", "Level", "Size", "Cores sharing"))
+```
+
 ```{r plot_cpu_memcopy}
 ggplot(t_cpu_memcopy) +
-  geom_point(mapping = aes(x = dwords * 4.0, y = bytes_per_second / (1024 ^
-                                                                       3))) +
-  scale_x_continuous(trans = 'log2', n.breaks = 8) +
+  geom_point(mapping = aes(x = dwords * 4.0, y = bytes_per_second / (1024 ^ 3))) +
+  scale_x_continuous(trans = 'log2', n.breaks = 8, labels = scales::label_bytes(units="auto_binary")) +
   labs(title = "Speed of a simple memory copy showing cache size influence") +
   xlab("Bytes copied") + ylab("GB/s")
 ```
 
 ```{r plot_cpu_linwalk}
 ggplot(t_cpu_memread_linear) +
-  geom_point(mapping = aes(x = dwords * 4.0, y = bytes_per_second / (1024 ^
-                                                                       3))) +
-  scale_x_continuous(trans = 'log2', n.breaks = 8) +
+  geom_point(mapping = aes(x = dwords * 4.0, y = bytes_per_second / (1024 ^ 3))) +
+  scale_x_continuous(trans = 'log2', n.breaks = 8, labels = scales::label_bytes(units="auto_binary")) +
   labs(title = "Memory read (linear) speed") +
   xlab("Bytes read") + ylab("GB/s")
 ```
 
 ```{r plot_cpu_listwalk}
 ggplot(t_cpu_memread_listwalk) +
-  geom_point(mapping = aes(x = dwords * 4.0, y = bytes_per_second / (1024 ^
-                                                                       3))) +
-  scale_x_continuous(trans = 'log2', n.breaks = 8) +
+  geom_point(mapping = aes(x = dwords * 4.0, y = bytes_per_second / (1024 ^ 3))) +
+  scale_x_continuous(trans = 'log2', n.breaks = 8, labels = scales::label_bytes(units="auto_binary")) +
   labs(title = "Memory read (listwalk) speed") +
   xlab("Bytes read") + ylab("GB/s")
 ```
 
+## Transfers between CPU and DPU
 
+### WRAM (static local RAM on the DPU)
 
+```{r plot_cpu_dpu_wram}
+ggplot(t_cpu_dpu_copy %>% filter(mram=="WRAM"),
+       aes(x = memused, y = bytes_per_second / (1024 ^ 2), shape=direction, color=dpus)) +
+  geom_point(size = 2) +
+  geom_smooth(se=FALSE, size=0.25, formula = y ~ log2(x), method = "loess") +
+  scale_x_continuous(trans = 'log2', n.breaks = 8, labels = scales::label_bytes(units="auto_binary")) +
+  scale_y_continuous(trans = 'log2', n.breaks = 8) +
+  scale_shape_manual(values = c(0, 3, 4)) +
+  labs(title = "CPU<->DPU WRAM copy speed") +
+  xlab("Bytes copied") + ylab("MB/s")
+```
+
+```{r plot_cpu_dpu_wram_latency}
+
+ggplot(t_cpu_dpu_copy %>% filter(mram=="WRAM", memused<=512),
+       aes(x = memused, y = real_time * 1e-3, shape=direction, color=dpus)) +
+  geom_point(size=2.5) +
+  scale_x_continuous(trans = 'log2', n.breaks = 8) +
+  scale_y_continuous(trans = 'log10', n.breaks = 8) +
+  scale_shape_manual(values = c(0, 3, 4)) +
+  labs(title = "CPU<->DPU WRAM copy latency") +
+  xlab("Bytes copied per DPU") + ylab("Microsecond latency") +
+  facet_wrap(vars(direction))
+```
+
+### MRAM (64MB DRAM block next to the DPU)
+
+```{r plot_cpu_dpu_mram, fig.height = 8}
+ggplot(t_cpu_dpu_copy %>% filter(mram=="MRAM"),
+       aes(x = memused, y = bytes_per_second / (1024 ^ 2), shape=direction, color=dpus)) +
+  geom_point(size = 2) +
+  geom_smooth(se=FALSE, size=0.25, formula = y ~ log2(x), method = "loess") +
+  scale_x_continuous(trans = 'log2', n.breaks = 8, labels = scales::label_bytes(units="auto_binary")) +
+  scale_y_continuous(trans = 'log2', n.breaks = 8) +
+  scale_shape_manual(values = c(0, 3, 4)) +
+  labs(title = "CPU<->DPU MRAM copy speed") +
+  xlab("Bytes copied") + ylab("MiB per second") +
+  facet_grid(rows=vars(direction))
+```
+
+```{r plot_cpu_dpu_mram_latency}
+
+ggplot(t_cpu_dpu_copy %>% filter(mram=="MRAM", memused<=512),
+       aes(x = memused, y = real_time * 1e-3, shape=direction, color=dpus)) +
+  geom_point(size=2.5) +
+  scale_x_continuous(trans = 'log2', n.breaks = 8) +
+  scale_y_continuous(trans = 'log10', n.breaks = 8) +
+  scale_shape_manual(values = c(0, 3, 4)) +
+  labs(title = "CPU<->DPU MRAM copy latency") +
+  xlab("Bytes copied per DPU") + ylab("Microsecond latency") +
+  facet_wrap(vars(direction))
+```
+
+## In-DPU copy performance (bandwidth)
+
+### WRAM
+
+```{r plot_dpu_wram}
+
+ggplot(t_dpu_copy %>% filter(mram=="WRAM"),
+       aes(x = dpu_batch_size, y = bytes_per_second / 1024^2, color=dpus, shape=dpu_reps)) +
+  geom_point(size=2.5) +
+  scale_x_continuous(trans = 'log2', n.breaks = 8, labels = scales::label_bytes(units="auto_binary")) +
+  scale_y_continuous(trans = 'log10', n.breaks = 8) +
+  scale_shape_manual(values = c(0, 3, 4)) +
+  labs(title = "DPU WRAM<->WRAM copy bandwidth (including CPU dispatch overhead)") +
+  xlab("Bytes copied per DPU") + ylab("MiB per second")
+```
+
+```{r plot_dpu_wram_latency}
+
+ggplot(t_dpu_copy %>% filter(mram=="WRAM"),
+       aes(x = dpu_batch_size, y = real_time * 1e-3, color=dpus, shape=dpu_reps)) +
+  geom_point(size=2.5) +
+  scale_x_continuous(trans = 'log2', n.breaks = 8, labels = scales::label_bytes(units="auto_binary")) +
+  scale_y_continuous(trans = 'log10', n.breaks = 8) +
+  scale_shape_manual(values = c(0, 3, 4)) +
+  labs(title = "DPU WRAM<->WRAM copy latency (including CPU dispatch overhead)") +
+  xlab("Bytes copied per DPU") + ylab("Microsecond latency")
+```
+
+### MRAM
+
+64-byte window was used as a block size for DMA transfers between the MRAM and WRAM. (TODO: A couple more of window sizes)
+
+```{r plot_dpu_mram}
+
+ggplot(t_dpu_copy %>% filter(mram=="MRAM"),
+       aes(x = dpu_batch_size, y = bytes_per_second / 1024^2, color=dpus, shape=dpu_reps)) +
+  geom_point(size=2.5) +
+  scale_x_continuous(trans = 'log2', n.breaks = 8, labels = scales::label_bytes(units="auto_binary")) +
+  scale_y_continuous(trans = 'log10', n.breaks = 8) +
+  scale_shape_manual(values = c(0, 3, 4)) +
+  labs(title = "DPU MRAM<WRAM>MRAM copy bandwidth (including CPU dispatch overhead)") +
+  xlab("Bytes copied per DPU") + ylab("MiB per second per DPU")
+```
+
+```{r plot_dpu_mram_total}
+
+ggplot(t_dpu_copy %>% filter(mram=="MRAM"),
+       aes(x = dpu_batch_size, y = bytes_per_second * as.numeric(dpus), color=dpus, shape=dpu_reps)) +
+  geom_point(size=2.5) +
+  scale_x_continuous(trans = 'log2', n.breaks = 8, labels = scales::label_bytes(units="auto_binary")) +
+  scale_y_continuous(trans = 'log10', n.breaks = 8, labels = scales::label_bytes(units="auto_binary")) +
+  scale_shape_manual(values = c(0, 3, 4)) +
+  labs(title = "DPU MRAM<WRAM>MRAM copy bandwidth total (including CPU dispatch)") +
+  xlab("Bytes copied per DPU") + ylab("bytes per second total for all DPUs")
+```
+
+```{r plot_dpu_mram_lat}
+
+ggplot(t_dpu_copy %>% filter(mram=="MRAM"),
+       aes(x = dpu_batch_size, y = real_time * 1e-3, color=dpus, shape=dpu_reps)) +
+  geom_point(size=2.5) +
+  scale_x_continuous(trans = 'log2', n.breaks = 8, labels = scales::label_bytes(units="auto_binary")) +
+  scale_y_continuous(trans = 'log10', n.breaks = 8, labels = scales::label_number()) +
+  scale_shape_manual(values = c(0, 3, 4)) +
+  labs(title = "DPU MRAM<WRAM>MRAM copy latency (including CPU dispatch overhead)") +
+  xlab("Bytes copied per DPU") + ylab("Microsecond latency")
+```
