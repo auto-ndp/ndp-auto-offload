@@ -2,6 +2,11 @@
 # Created by https://www.toptal.com/developers/gitignore/api/linux,windows,c++,rust,cmake
 # Edit at https://www.toptal.com/developers/gitignore?templates=linux,windows,c++,rust,cmake
 
+*.pdf
+memspeed-graphs/combined.json
+
+target/
+
 ### R ###
 # History files
 .Rhistory

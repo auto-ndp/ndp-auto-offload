@@ -3,9 +3,9 @@ title: "CPU and DPU memory performance analysis"
 author: "Jakub Szewczyk"
 date: "10/12/2020"
 output:
-  pdf_document:
-    toc: yes
   html_document:
+    toc: yes
+  pdf_document:
     toc: yes
 ---
 
@@ -122,6 +122,7 @@ bench_meta %>% enter_object("caches") %>% gather_array() %>% spread_all %>%
 ggplot(t_cpu_memcopy) +
   geom_point(mapping = aes(x = dwords * 4.0, y = bytes_per_second / (1024 ^ 3))) +
   scale_x_continuous(trans = 'log2', n.breaks = 8, labels = scales::label_bytes(units="auto_binary")) +
+  scale_y_continuous(trans = 'identity', n.breaks = 16) +
   labs(title = "Speed of a simple memory copy showing cache size influence") +
   xlab("Bytes copied") + ylab("GB/s")
 ```
@@ -130,6 +131,7 @@ ggplot(t_cpu_memcopy) +
 ggplot(t_cpu_memread_linear) +
   geom_point(mapping = aes(x = dwords * 4.0, y = bytes_per_second / (1024 ^ 3))) +
   scale_x_continuous(trans = 'log2', n.breaks = 8, labels = scales::label_bytes(units="auto_binary")) +
+  scale_y_continuous(trans = 'identity', n.breaks = 16) +
   labs(title = "Memory read (linear) speed") +
   xlab("Bytes read") + ylab("GB/s")
 ```
@@ -138,7 +140,8 @@ ggplot(t_cpu_memread_linear) +
 ggplot(t_cpu_memread_listwalk) +
   geom_point(mapping = aes(x = dwords * 4.0, y = bytes_per_second / (1024 ^ 3))) +
   scale_x_continuous(trans = 'log2', n.breaks = 8, labels = scales::label_bytes(units="auto_binary")) +
-  labs(title = "Memory read (listwalk) speed") +
+  scale_y_continuous(trans = 'identity', n.breaks = 16) +
+  labs(title = "Memory read (random listwalk) speed") +
   xlab("Bytes read") + ylab("GB/s")
 ```
 
@@ -164,7 +167,7 @@ ggplot(t_cpu_dpu_copy %>% filter(mram=="WRAM", memused<=512),
        aes(x = memused, y = real_time * 1e-3, shape=direction, color=dpus)) +
   geom_point(size=2.5) +
   scale_x_continuous(trans = 'log2', n.breaks = 8) +
-  scale_y_continuous(trans = 'log10', n.breaks = 8) +
+  scale_y_continuous(trans = 'log10', n.breaks = 16) +
   scale_shape_manual(values = c(0, 3, 4)) +
   labs(title = "CPU<->DPU WRAM copy latency") +
   xlab("Bytes copied per DPU") + ylab("Microsecond latency") +
@@ -234,22 +237,22 @@ ggplot(t_dpu_copy %>% filter(mram=="WRAM"),
 ```{r plot_dpu_mram}
 
 ggplot(t_dpu_copy %>% filter(mram=="MRAM"),
-       aes(x = dpu_batch_size, y = bytes_per_second / 1024^2, color=dpus, shape=dpu_reps)) +
+       aes(x = dpu_batch_size, y = bytes_per_second, color=dpus, shape=dpu_reps)) +
   geom_point(size=2.5) +
   scale_x_continuous(trans = 'log2', n.breaks = 8, labels = scales::label_bytes(units="auto_binary")) +
-  scale_y_continuous(trans = 'log10', n.breaks = 8) +
+  scale_y_continuous(trans = 'log10', n.breaks = 16, labels = scales::label_bytes(units="auto_binary")) +
   scale_shape_manual(values = c(0, 3, 4)) +
   labs(title = "DPU MRAM<WRAM>MRAM copy bandwidth (including CPU dispatch overhead)") +
-  xlab("Bytes copied per DPU") + ylab("MiB per second per DPU")
+  xlab("Bytes copied per DPU") + ylab("Bytes per second per DPU")
 ```
 
 ```{r plot_dpu_mram_total}
 
 ggplot(t_dpu_copy %>% filter(mram=="MRAM"),
-       aes(x = dpu_batch_size, y = bytes_per_second * as.numeric(dpus), color=dpus, shape=dpu_reps)) +
+       aes(x = dpu_batch_size, y = bytes_per_second * as.numeric(as.character(dpus)), color=dpus, shape=dpu_reps)) +
   geom_point(size=2.5) +
   scale_x_continuous(trans = 'log2', n.breaks = 8, labels = scales::label_bytes(units="auto_binary")) +
-  scale_y_continuous(trans = 'log10', n.breaks = 8, labels = scales::label_bytes(units="auto_binary")) +
+  scale_y_continuous(trans = 'log10', n.breaks = 16, labels = scales::label_bytes(units="auto_binary")) +
   scale_shape_manual(values = c(0, 3, 4)) +
   labs(title = "DPU MRAM<WRAM>MRAM copy bandwidth total (including CPU dispatch)") +
   xlab("Bytes copied per DPU") + ylab("bytes per second total for all DPUs")
@@ -261,7 +264,7 @@ ggplot(t_dpu_copy %>% filter(mram=="MRAM"),
        aes(x = dpu_batch_size, y = real_time * 1e-3, color=dpus, shape=dpu_reps)) +
   geom_point(size=2.5) +
   scale_x_continuous(trans = 'log2', n.breaks = 8, labels = scales::label_bytes(units="auto_binary")) +
-  scale_y_continuous(trans = 'log10', n.breaks = 8, labels = scales::label_number()) +
+  scale_y_continuous(trans = 'log10', n.breaks = 16, labels = scales::label_number()) +
   scale_shape_manual(values = c(0, 3, 4)) +
   labs(title = "DPU MRAM<WRAM>MRAM copy latency (including CPU dispatch overhead)") +
   xlab("Bytes copied per DPU") + ylab("Microsecond latency")
