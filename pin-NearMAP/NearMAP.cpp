@@ -18,18 +18,10 @@ struct AccessState {
   constexpr static uintptr_t TracePageSize = 4096;
   uint64_t currTime = 0;
   std::unordered_map<uintptr_t, RWTime> pageLastAccesses;
-  std::vector<uintptr_t> bbTimeStack;
+  std::vector<uintptr_t> phaseTimes;
 } accessState;
 
-std::vector<std::string> routineNames;
-
-const std::string BannedPrefixes[] = {"__",        "_IO",  "_int_free", "_dl",
-                                      "str",       "mem",  "_mem",      "_str",
-                                      "do_lookup", "match"};
-
-bool startsWith(const std::string &str, const std::string &pfx) {
-  return (str.size() >= pfx.size()) && (str.find(pfx) == 0);
-}
+const std::string PhaseStubName = "pinnearmap_phase";
 
 /* ===================================================================== */
 // Command line switches
@@ -37,10 +29,6 @@ bool startsWith(const std::string &str, const std::string &pfx) {
 KNOB<std::string> KnobOutputFile(KNOB_MODE_WRITEONCE, "pintool", "o",
                                  "pin_nearmap.log",
                                  "specify file name for NearMAP output");
-
-KNOB<uint32_t> KnobMinInstructions(
-    KNOB_MODE_WRITEONCE, "pintool", "i", "64",
-    "Threshold number of instructions for blocks to be traced");
 
 INT32 Usage() {
   cerr << KNOB_BASE::StringKnobSummary() << endl;
@@ -52,11 +40,9 @@ INT32 Usage() {
 // Analysis routines
 /* ===================================================================== */
 
-void summarizeLastAccesses(uint32_t routineNameIdx, uint32_t startTime,
-                           uint32_t endTime) {
+void summarizeLastAccesses(uint32_t startTime, uint32_t endTime) {
   if (endTime < startTime) {
-    cerr << "Error: End time < Start time for routine "
-         << routineNames.at(routineNameIdx) << endl;
+    cerr << "Error: End time < Start time" << endl;
   }
   uint64_t uniqRO = 0, uniqRW = 0, uniqWO = 0;
   for (const auto &access : accessState.pageLastAccesses) {
@@ -75,8 +61,8 @@ void summarizeLastAccesses(uint32_t routineNameIdx, uint32_t startTime,
     } else {
       uniqWO++;
     }
-    *out << "trace;" << routineNameIdx << ';' << startTime << ';' << endTime
-         << ';' << pageIdx << ';';
+    *out << "trace;" << ';' << startTime << ';' << endTime << ';' << pageIdx
+         << ';';
     if (didRead) {
       *out << 'R';
     }
@@ -87,28 +73,27 @@ void summarizeLastAccesses(uint32_t routineNameIdx, uint32_t startTime,
   }
   out->flush();
   cerr << "Rtn RO:" << uniqRO << " RW:" << uniqRW << " WO:" << uniqWO
-       << " TOT:" << uniqRO + uniqRW + uniqWO
-       << " nm: " << routineNames.at(routineNameIdx) << "\n";
+       << " TOT:" << uniqRO + uniqRW + uniqWO << "\n";
 }
 
-VOID BeforeBbl() {
-  accessState.currTime++;
-  accessState.bbTimeStack.push_back(accessState.currTime);
-}
+// VOID BeforeBbl() {
+//   accessState.currTime++;
+//   accessState.bbTimeStack.push_back(accessState.currTime);
+// }
 
-VOID AfterBbl(UINT32 routineNameIdx) {
-  accessState.currTime++;
-  const uint64_t endTime = accessState.currTime;
-  auto &timeStack = accessState.bbTimeStack;
-  const uint64_t startTime = timeStack.back();
-  if (timeStack.size() > 1) {
-    timeStack.pop_back();
-  } else {
-    cerr << "Warning: Trace stack underflow, results might not be accurate"
-         << endl;
-  }
-  summarizeLastAccesses(routineNameIdx, startTime, endTime);
-}
+// VOID AfterBbl(UINT32 routineNameIdx) {
+//   accessState.currTime++;
+//   const uint64_t endTime = accessState.currTime;
+//   auto &timeStack = accessState.bbTimeStack;
+//   const uint64_t startTime = timeStack.back();
+//   if (timeStack.size() > 1) {
+//     timeStack.pop_back();
+//   } else {
+//     cerr << "Warning: Trace stack underflow, results might not be accurate"
+//          << endl;
+//   }
+//   summarizeLastAccesses(routineNameIdx, startTime, endTime);
+// }
 
 VOID OnRead(ADDRINT addr, UINT32 accessSz) {
   const uintptr_t apage = addr / AccessState::TracePageSize;
@@ -130,32 +115,31 @@ VOID OnWrite(ADDRINT addr, UINT32 accessSz) {
   }
 }
 
+extern "C" {
+void PhaseStubReplacement(const char *name) {
+  accessState.currTime++;
+  uint64_t currTime = accessState.currTime;
+  uint64_t prevTime = accessState.phaseTimes.back();
+  *out << "phase;" << prevTime << ';' << currTime << ';' << name << endl;
+  cerr << "Phase " << name << " from " << prevTime << " to " << currTime
+       << endl;
+  accessState.phaseTimes.push_back(currTime);
+  summarizeLastAccesses(prevTime, currTime);
+}
+}
+
 /* ===================================================================== */
 // Instrumentation callbacks
 /* ===================================================================== */
 
 VOID Routine(RTN rtn, VOID *v) {
   RTN_Open(rtn);
-  uint32_t numIns = RTN_NumIns(rtn);
   do {
-    if (numIns > KnobMinInstructions.Value()) {
-      std::string name = RTN_Name(rtn);
-      bool banned = false;
-      for (const auto &pfx : BannedPrefixes) {
-        if (startsWith(name, pfx)) {
-          banned = true;
-        }
-      }
-      if (banned) {
-        break;
-      }
-      uint32_t nameIdx = routineNames.size();
-      *out << "name;" << nameIdx << ';' << name << '\n';
-      routineNames.push_back(std::move(name));
-      RTN_InsertCall(rtn, IPOINT_BEFORE, (AFUNPTR)BeforeBbl, IARG_END);
-      RTN_InsertCall(rtn, IPOINT_AFTER, (AFUNPTR)AfterBbl, IARG_UINT32, nameIdx,
-                     IARG_END);
+    if (RTN_Name(rtn) != PhaseStubName) {
+      break;
     }
+    RTN_Replace(rtn, (AFUNPTR)PhaseStubReplacement);
+    *out << "Phase stub found and instrumented\n";
   } while (0);
   RTN_Close(rtn);
 }
@@ -196,9 +180,8 @@ int main(int argc, char *argv[]) {
     return Usage();
   }
 
-  routineNames.reserve(4096);
-  accessState.bbTimeStack.reserve(4096);
-  accessState.bbTimeStack.push_back(0);
+  accessState.phaseTimes.reserve(128);
+  accessState.phaseTimes.push_back(0);
 
   std::string fileName = KnobOutputFile.Value();
 
