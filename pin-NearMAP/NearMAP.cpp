@@ -162,7 +162,9 @@ VOID Instruction(INS ins, VOID *v) {
  * @param[in]   v               value specified by the tool in the
  *                              PIN_AddFiniFunction function call
  */
-VOID Fini(INT32 code, VOID *v) {}
+VOID Fini(INT32 code, VOID *v) {
+  PhaseStubReplacement("program-finish");
+}
 
 /*!
  * The main procedure of the tool.
