@@ -71,6 +71,8 @@ void summarizeLastAccesses(uint32_t startTime, uint32_t endTime) {
     }
     *out << ";\n";
   }
+  *out << "summary-ro-rw-wo-tot;" << uniqRO << ';' << uniqRW << ';' << uniqWO
+       << ';' << uniqRO + uniqRW + uniqWO << "\n";
   out->flush();
   cerr << "Rtn RO:" << uniqRO << " RW:" << uniqRW << " WO:" << uniqWO
        << " TOT:" << uniqRO + uniqRW + uniqWO << "\n";
@@ -162,9 +164,7 @@ VOID Instruction(INS ins, VOID *v) {
  * @param[in]   v               value specified by the tool in the
  *                              PIN_AddFiniFunction function call
  */
-VOID Fini(INT32 code, VOID *v) {
-  PhaseStubReplacement("program-finish");
-}
+VOID Fini(INT32 code, VOID *v) { PhaseStubReplacement("program-finish"); }
 
 /*!
  * The main procedure of the tool.
