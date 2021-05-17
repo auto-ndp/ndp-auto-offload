@@ -30,6 +30,8 @@ KNOB<std::string> KnobOutputFile(KNOB_MODE_WRITEONCE, "pintool", "o",
                                  "pin_nearmap.log",
                                  "specify file name for NearMAP output");
 
+uint64_t lastReadPage{0}, lastWritePage{0};
+
 INT32 Usage() {
   cerr << KNOB_BASE::StringKnobSummary() << endl;
 
@@ -40,7 +42,7 @@ INT32 Usage() {
 // Analysis routines
 /* ===================================================================== */
 
-void summarizeLastAccesses(uint32_t startTime, uint32_t endTime) {
+void summarizeLastAccesses(uint64_t startTime, uint64_t endTime) {
   if (endTime < startTime) {
     cerr << "Error: End time < Start time" << endl;
   }
@@ -77,25 +79,6 @@ void summarizeLastAccesses(uint32_t startTime, uint32_t endTime) {
   cerr << "Rtn RO:" << uniqRO << " RW:" << uniqRW << " WO:" << uniqWO
        << " TOT:" << uniqRO + uniqRW + uniqWO << "\n";
 }
-
-// VOID BeforeBbl() {
-//   accessState.currTime++;
-//   accessState.bbTimeStack.push_back(accessState.currTime);
-// }
-
-// VOID AfterBbl(UINT32 routineNameIdx) {
-//   accessState.currTime++;
-//   const uint64_t endTime = accessState.currTime;
-//   auto &timeStack = accessState.bbTimeStack;
-//   const uint64_t startTime = timeStack.back();
-//   if (timeStack.size() > 1) {
-//     timeStack.pop_back();
-//   } else {
-//     cerr << "Warning: Trace stack underflow, results might not be accurate"
-//          << endl;
-//   }
-//   summarizeLastAccesses(routineNameIdx, startTime, endTime);
-// }
 
 VOID OnRead(ADDRINT addr, UINT32 accessSz) {
   const uintptr_t apage = addr / AccessState::TracePageSize;

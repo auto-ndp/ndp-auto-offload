@@ -32,6 +32,11 @@ BENCHMARKS=(
   '511.povray_r'
   '519.lbm_r'
   '520.omnetpp_r'
+  '523.xalancbmk_r'
+  '526.blender_r'
+  '538.imagick_r'
+  '541.leela_r'
+  '544.nab_r'
 )
 RUNCPU_CONFIG='--config=kubasz-gcc-amd64.cfg'
 
@@ -100,9 +105,9 @@ for bench in "${BENCHMARKS[@]}"; do
     rresf=${RESULT_PATH}/${bench}_c${cmdi}.log
     echo > ${rresf} # erase old results
     echo "= Saving results to '$rresf'"
-    echo "= Executing"
-    "${PIN_EXE}" -t "${NEARMAP_SO}" -o "${rresf}" -- "${racmd[@]}" </dev/null >${rresf}.stdout 2>${rresf}.stderr || (echo "Failed with error code $?" ; exit 1)
-    echo "= Done"
+    echo "= Executing" "${racmd[@]}"
+    "${PIN_EXE}" -t "${NEARMAP_SO}" -o "${rresf}" -- "${racmd[@]}" </dev/null >${rresf}.stdout 2>${rresf}.stderr || (echo "Failed with error code $?" ; exit 1) &
     ((cmdi++))
   done
 done
+wait
