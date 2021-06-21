@@ -1,0 +1,3 @@
+[submodule "deathstarbench"]
+	path = deathstarbench
+	url = git@github.com:auto-ndp/DeathStarBench.git
