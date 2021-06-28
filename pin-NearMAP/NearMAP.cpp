@@ -15,7 +15,7 @@ struct RWTime {
 };
 
 struct AccessState {
-  constexpr static uintptr_t TracePageSize = 4096;
+  constexpr static uintptr_t TracePageSize = 64;
   uint64_t currTime = 0;
   std::unordered_map<uintptr_t, RWTime> pageLastAccesses;
   std::vector<uintptr_t> phaseTimes;

@@ -1,3 +1,6 @@
 [submodule "deathstarbench"]
 	path = deathstarbench
 	url = git@github.com:auto-ndp/DeathStarBench.git
+[submodule "serverless-benchmarks"]
+	path = serverless-benchmarks
+	url = git@github.com:auto-ndp/serverless-benchmarks.git
