@@ -1,0 +1,48 @@
+502.gcc_r
+505.mcf_r
+507.cactuBSSN_r
+508.namd_r
+510.parest_r
+511.povray_r
+519.lbm_r
+520.omnetpp_r
+
+523.xalancbmk_r
+526.blender_r
+538.imagick_r
+541.leela_r
+544.nab_r
+# x264 - does processing in-line with IO frame by frame - not included
+# cam4-fortran
+# 531.deepsjeng_r - in-line "processing" - input tiny
+# fotonik, exchange2, roms - fortran
+# xz - stream processing, also doesn't make sense to do this with compression anyway
+
+
+kubasz     30991  0.2  0.0   4768  1808 pts/0    S+   15:47   0:00 strace --trace=execve runcpu --config=kubasz-gcc-amd64.cfg --action=run 502.gcc_r
+kubasz     30994  2.0  0.2 136992 84840 pts/0    S    15:47   0:00 specperl -I/home/kubasz/phd/code/third-party/spec2017/bin/common -I/home/kubasz/phd/code/third-party/spec2017/bin/harness -I/home/kubasz/phd/code/third-party/spec2017/bin -I/home/kubasz/phd/code/third-party/spec2017/bin/lib /home/kubasz/phd/code/third-party/spec2017/bin/harness/runcpu --config=kubasz-gcc-amd64.cfg --action=run 502.gcc_r
+kubasz     31016  5.8  0.3 151580 99356 pts/0    S    15:47   0:01 /home/kubasz/phd/code/third-party/spec2017/bin/specperl /home/kubasz/phd/code/third-party/spec2017/bin/harness/runcpu --configfile kubasz-gcc-amd64.cfg --action run --noreportable --nopower --runmode rate --tune base --size refrate 502.gcc_r --nopreenv --note-preenv --logfile /home/kubasz/phd/code/third-party/spec2017/tmp/CPU2017.018/templogs/preenv.intrate.018.0 --lognum 018.0 --from_runcpu 2
+kubasz     31017  0.0  0.2 136992 80656 pts/0    S    15:47   0:00 specperl -I/home/kubasz/phd/code/third-party/spec2017/bin/common -I/home/kubasz/phd/code/third-party/spec2017/bin/harness -I/home/kubasz/phd/code/third-party/spec2017/bin -I/home/kubasz/phd/code/third-party/spec2017/bin/lib /home/kubasz/phd/code/third-party/spec2017/bin/harness/runcpu --config=kubasz-gcc-amd64.cfg --action=run 502.gcc_r
+kubasz     31094  0.0  0.0   2388   264 pts/0    S    15:47   0:00 /home/kubasz/phd/code/third-party/spec2017/bin/specinvoke -d /home/kubasz/phd/code/third-party/spec2017/benchspec/CPU/502.gcc_r/run/run_base_refrate_kubasz-m64.0001 -f speccmds.cmd -q -e speccmds.err -o speccmds.stdout
+kubasz     31095  0.0  0.2 151580 94124 pts/0    S    15:47   0:00 /home/kubasz/phd/code/third-party/spec2017/bin/specperl /home/kubasz/phd/code/third-party/spec2017/bin/harness/runcpu --configfile kubasz-gcc-amd64.cfg --action run --noreportable --nopower --runmode rate --tune base --size refrate 502.gcc_r --nopreenv --note-preenv --logfile /home/kubasz/phd/code/third-party/spec2017/tmp/CPU2017.018/templogs/preenv.intrate.018.0 --lognum 018.0 --from_runcpu 2
+kubasz     31096  100  3.2 1072580 1064184 pts/0 R    15:47   0:21 ../run_base_refrate_kubasz-m64.0001/cpugcc_r_base.kubasz-m64 gcc-pp.c -O3 -finline-limit=0 -fif-conversion -fif-conversion2 -o gcc-pp.opts-O3_-finline-limit_0_-fif-conversion_-fif-conversion2.s
+kubasz     31148  0.0  0.0   8944  2500 pts/1    S+   15:48   0:00 grep --color=auto gcc
+
+../run_base_refrate_kubasz-m64.0001/cpugcc_r_base.kubasz-m64 gcc-pp.c -O3 -finline-limit=0 -fif-conversion -fif-conversion2 -o gcc-pp.opts-O3_-finline-limit_0_-fif-conversion_-fif-conversion2.s
+
+~/phd/code/third-party/pin3.18/pin -t ~/phd/code/pin-NearMAP/obj-intel64/NearMAP.so -- ../run_base_refrate_kubasz-m64.0001/cpugcc_r_base.kubasz-m64 gcc-pp.c -O3 -finline-limit=0 -fif-conversion -fif-conversion2 -o gcc-pp.opts-O3_-finline-limit_0_-fif-conversion_-fif-conversion2.s
+Phase main-start from 0 to 174725
+Rtn RO:0 RW:383 WO:0 TOT:383
+Phase do_compile-start from 174725 to 369271
+Rtn RO:129 RW:84 WO:33 TOT:246
+Phase parse_file-begin from 369271 to 2909227
+Rtn RO:149 RW:344 WO:184 TOT:677
+
+look at speccmd
+-c > stdout -e > stderr cmd
+
+
+sysbench --threads=1 memory run
+
+Native: 10.0s 76682795
+Oldpin: 10.0s  4463826

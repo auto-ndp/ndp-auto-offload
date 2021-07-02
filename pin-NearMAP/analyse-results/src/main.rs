@@ -86,9 +86,13 @@ fn analyse_file(path: &Path, out: &mut String) -> io::Result<()> {
         let mut read_pages: u64 = 0;
         let mut written_pages: u64 = 0;
         let mut dead_writes: u64 = 0;
+        let mut new_reads: u64 = 0;
         for (pid, access) in phase.accesses.iter() {
             if access.is_read() {
                 read_pages += 1;
+                if phases[..i].iter().all(|p| p.accesses.get(pid).is_none()) {
+                    new_reads += 1;
+                }
             }
             if access.is_write() {
                 written_pages += 1;
@@ -102,12 +106,13 @@ fn analyse_file(path: &Path, out: &mut String) -> io::Result<()> {
         }
         writeln!(
             out,
-            "{},{},{},{},{}",
+            "{},{},{},{},{},{}",
             path.display(),
             phase.name,
             read_pages,
             written_pages,
-            dead_writes
+            dead_writes,
+            new_reads,
         )
         .unwrap();
     }
@@ -117,11 +122,11 @@ fn analyse_file(path: &Path, out: &mut String) -> io::Result<()> {
 /// Outputs CSV
 fn analyse_folder(folder: &Path, out: &mut String) -> io::Result<()> {
     writeln!(out, "{}", folder.display()).unwrap();
-    out.push_str("Trace,Phase,Read pages,Written pages,Dead written pages\n");
+    out.push_str("Trace,Phase,Read pages,Written pages,Dead written pages,New reads\n");
     for file in fs::read_dir(folder)? {
         let file = file?;
         let path = file.path();
-        if path.extension().unwrap() != "log" {
+        if path.extension().map(|e| e != "log").unwrap_or(true) {
             continue;
         }
         eprintln!("Analysing {:?}", path);
