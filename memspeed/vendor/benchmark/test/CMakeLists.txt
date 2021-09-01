@@ -87,6 +87,9 @@ add_test(NAME options_benchmarks COMMAND options_test --benchmark_min_time=0.01)
 compile_benchmark_test(basic_test)
 add_test(NAME basic_benchmark COMMAND basic_test --benchmark_min_time=0.01)
 
+compile_output_test(repetitions_test)
+add_test(NAME repetitions_benchmark COMMAND repetitions_test --benchmark_min_time=0.01 --benchmark_repetitions=3)
+
 compile_benchmark_test(diagnostics_test)
 add_test(NAME diagnostics_test COMMAND diagnostics_test --benchmark_min_time=0.01)
 
@@ -127,6 +130,9 @@ add_test(NAME templated_fixture_test COMMAND templated_fixture_test --benchmark_
 
 compile_output_test(user_counters_test)
 add_test(NAME user_counters_test COMMAND user_counters_test --benchmark_min_time=0.01)
+
+compile_output_test(perf_counters_test)
+add_test(NAME perf_counters_test COMMAND perf_counters_test --benchmark_min_time=0.01 --benchmark_perf_counters=CYCLES,BRANCHES)
 
 compile_output_test(internal_threading_test)
 add_test(NAME internal_threading_test COMMAND internal_threading_test --benchmark_min_time=0.01)
@@ -193,9 +199,11 @@ if (BENCHMARK_ENABLE_GTEST_TESTS)
 
   add_gtest(benchmark_gtest)
   add_gtest(benchmark_name_gtest)
+  add_gtest(benchmark_random_interleaving_gtest)
   add_gtest(commandlineflags_gtest)
   add_gtest(statistics_gtest)
   add_gtest(string_util_gtest)
+  add_gtest(perf_counters_gtest)
 endif(BENCHMARK_ENABLE_GTEST_TESTS)
 
 ###############################################################################
