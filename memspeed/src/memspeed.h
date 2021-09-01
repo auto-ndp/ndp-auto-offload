@@ -10,8 +10,8 @@
 #else
 #include <x86intrin.h>
 #endif
-#include <ctime>
 #include <cstdlib>
+#include <ctime>
 #include <sys/mman.h>
 
 inline bool ends_with(std::string sv, char c) {
@@ -94,18 +94,19 @@ inline uint64_t get_cpu_tsc() {
          1000000000ULL * static_cast<uint64_t>(ts.tv_sec);
 }
 
-template<class T>
-struct MmapArray {
+template <class T> struct MmapArray {
 private:
-  T* ptr = nullptr;
+  T *ptr = nullptr;
   size_t length;
   size_t bytes;
+
 public:
-  MmapArray(size_t N) {
+  MmapArray(size_t N, bool populate = true) {
     this->length = N;
     this->bytes = N * sizeof(T);
-    void* mmres = mmap(nullptr, this->bytes, PROT_READ | PROT_WRITE,
-             MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
+    void *mmres = mmap(
+        nullptr, this->bytes, PROT_READ | PROT_WRITE,
+        MAP_PRIVATE | MAP_ANONYMOUS | (populate ? MAP_POPULATE : 0), -1, 0);
     if (mmres == MAP_FAILED || mmres == nullptr) {
       perror("Couldn't allocate mmap array");
       exit(1);
@@ -118,13 +119,11 @@ public:
       ptr = nullptr;
     }
   }
-  MmapArray(MmapArray&) = delete;
-  MmapArray(MmapArray&&) = delete;
-  MmapArray& operator=(MmapArray&) = delete;
-  T& operator[](size_t idx) {
-    return this->ptr[idx];
-  }
-  T* data() {return this->ptr;}
-  size_t size() {return this->length;}
-  size_t size_in_bytes() {return this->bytes;}
+  MmapArray(MmapArray &) = delete;
+  MmapArray(MmapArray &&) = delete;
+  MmapArray &operator=(MmapArray &) = delete;
+  T &operator[](size_t idx) { return this->ptr[idx]; }
+  T *data() { return this->ptr; }
+  size_t size() { return this->length; }
+  size_t size_in_bytes() { return this->bytes; }
 };
