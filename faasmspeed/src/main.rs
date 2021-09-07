@@ -173,10 +173,14 @@ async fn async_main(opts: &'static Options) -> Result<()> {
     }
 
     if opts.csv {
-        eprintln!(
-            "{} errors encountered, statistics from {} results",
-            errors.len(),
-            results.len()
+        println!(
+            "opts,host,{},user,{},function,{},req-rps,{:.1},req-time,{:.1},input-data-0,{}",
+            opts.url,
+            opts.user,
+            opts.function,
+            opts.requests_per_second,
+            opts.time,
+            opts.input_data[0]
         );
         println!(
             "errors,count,{}\nresults,count,{}",
@@ -263,7 +267,7 @@ where
     let q3: N = sorted_data.clone().nth(3 * n / 4).unwrap_or(zero);
     let q01: N = sorted_data.clone().nth(n / 100).unwrap_or(zero);
     let q99: N = sorted_data.clone().nth(99 * n / 100).unwrap_or(zero);
-    let avg: N = sum / N::try_from(n).unwrap_or(zero);
+    let avg: N = sum / N::try_from(n.max(1)).unwrap_or_else(|_| N::one());
     let variance: N = sorted_data.map(|x| (x - avg) * (x - avg)).sum();
     let stddev = (variance.try_into().unwrap_or(0usize) as f64).sqrt();
     if csv {
