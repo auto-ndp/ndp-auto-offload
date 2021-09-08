@@ -1,0 +1,63 @@
+---
+title: "Faasm latency measurements"
+author: "Jakub Szewczyk"
+date: "08-09-2021"
+output:
+  html_document:
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(rio)
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r read_csv, include=FALSE, cache=TRUE, cache.extra = file.info("table.csv")}
+raw_csv <- import('table.csv')
+```
+
+```{r tidy_bench}
+t_data <- raw_csv %>%
+  mutate (
+    opts_host = factor(opts_host),
+    opts_user = factor(opts_user),
+    opts_function = factor(opts_function),
+  )
+
+# t_cpu_memcopy <- bench_raw %>%
+#   filter(str_detect(name, "^BM_cpu_memcopy/")) %>%
+#   select(name, iterations, cpu_time, bytes_per_second, memused) %>%
+#   extract(
+#     name,
+#     into = c("dwords"),
+#     regex = "^BM_cpu_memcopy/([0-9]+)",
+#     remove = TRUE,
+#     convert = TRUE
+#   )
+
+# t_cpu_memread_linear <- bench_raw %>%
+#   filter(str_detect(name, "^BM_cpu_memread_linear/")) %>%
+#   select(name, iterations, cpu_time, bytes_per_second, memused) %>%
+#   extract(
+#     name,
+#     into = c("dwords"),
+#     regex = "^BM_cpu_memread_linear/([0-9]+)",
+#     remove = TRUE,
+#     convert = TRUE
+#   )
+
+```
+
+## Latencies
+
+```{r plot_lat}
+ggplot(t_data, aes(x = opts_req_rps, ymin = latency_us_min, ymax = latency_us_max, lower = latency_us_q1, middle = latency_us_med, upper = latency_us_q3)) +
+  geom_boxplot(stat = 'identity', aes(group = interaction(opts_req_rps, opts_function), color = opts_function)) +
+  scale_x_continuous(trans = 'log') +
+  scale_y_continuous(trans = 'log') +
+  labs(title = "Latency for a given request per second rate") +
+  xlab("Req/s") + ylab("µs")
+```
