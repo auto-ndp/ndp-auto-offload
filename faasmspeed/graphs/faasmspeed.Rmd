@@ -12,6 +12,7 @@ output:
 ```{r setup, include=FALSE}
 library(tidyverse)
 library(rio)
+library(scales)
 knitr::opts_chunk$set(echo = FALSE)
 ```
 
@@ -35,18 +36,19 @@ t_data <- raw_csv %>%
 ggplot(t_data %>% filter(opts_function == "hello"),
     aes(x = opts_req_rps, ymin = latency_us_q1pct, ymax = latency_us_q99pct, lower = latency_us_q1, middle = latency_us_med, upper = latency_us_q3)) +
   geom_boxplot(stat = 'identity', aes(group = interaction(opts_req_rps, opts_function), color = opts_function)) +
-  scale_x_continuous(trans = 'log', n.breaks = 15) +
-  scale_y_continuous(trans = 'identity', n.breaks = 15) +
+  scale_x_continuous(trans = 'log', breaks = log_breaks(n=10), label = scales::label_comma(accuracy = 1)) +
+  scale_y_continuous(trans = 'log', breaks = log_breaks(n=10), label = scales::label_comma(accuracy = 1)) +
   labs(title = "Latency for a given request per second rate") +
   xlab("Req/s") + ylab("µs")
 ```
 
 ```{r plot_lat_no_hello}
+plot_scale <- 1.0/1000.0
 ggplot(t_data %>% filter(opts_function != "hello"),
-    aes(x = opts_req_rps, ymin = latency_us_q1pct, ymax = latency_us_q99pct, lower = latency_us_q1, middle = latency_us_med, upper = latency_us_q3)) +
+    aes(x = opts_req_rps, ymin = latency_us_q1pct*plot_scale, ymax = latency_us_q99pct*plot_scale, lower = latency_us_q1*plot_scale, middle = latency_us_med*plot_scale, upper = latency_us_q3*plot_scale)) +
   geom_boxplot(stat = 'identity', aes(group = interaction(opts_req_rps, opts_function), color = opts_function)) +
-  scale_x_continuous(trans = 'log', n.breaks = 15) +
-  scale_y_continuous(trans = 'log', n.breaks = 15) +
+  scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
+  scale_y_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
   labs(title = "Latency for a given request per second rate") +
-  xlab("Req/s") + ylab("µs")
+  xlab("Req/s") + ylab("milliseconds")
 ```
