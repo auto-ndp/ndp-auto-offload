@@ -27,37 +27,26 @@ t_data <- raw_csv %>%
     opts_function = factor(opts_function),
   )
 
-# t_cpu_memcopy <- bench_raw %>%
-#   filter(str_detect(name, "^BM_cpu_memcopy/")) %>%
-#   select(name, iterations, cpu_time, bytes_per_second, memused) %>%
-#   extract(
-#     name,
-#     into = c("dwords"),
-#     regex = "^BM_cpu_memcopy/([0-9]+)",
-#     remove = TRUE,
-#     convert = TRUE
-#   )
-
-# t_cpu_memread_linear <- bench_raw %>%
-#   filter(str_detect(name, "^BM_cpu_memread_linear/")) %>%
-#   select(name, iterations, cpu_time, bytes_per_second, memused) %>%
-#   extract(
-#     name,
-#     into = c("dwords"),
-#     regex = "^BM_cpu_memread_linear/([0-9]+)",
-#     remove = TRUE,
-#     convert = TRUE
-#   )
-
 ```
 
 ## Latencies
 
-```{r plot_lat}
-ggplot(t_data, aes(x = opts_req_rps, ymin = latency_us_min, ymax = latency_us_max, lower = latency_us_q1, middle = latency_us_med, upper = latency_us_q3)) +
+```{r plot_lat_hello}
+ggplot(t_data %>% filter(opts_function == "hello"),
+    aes(x = opts_req_rps, ymin = latency_us_q1pct, ymax = latency_us_q99pct, lower = latency_us_q1, middle = latency_us_med, upper = latency_us_q3)) +
   geom_boxplot(stat = 'identity', aes(group = interaction(opts_req_rps, opts_function), color = opts_function)) +
-  scale_x_continuous(trans = 'log') +
-  scale_y_continuous(trans = 'log') +
+  scale_x_continuous(trans = 'log', n.breaks = 15) +
+  scale_y_continuous(trans = 'identity', n.breaks = 15) +
+  labs(title = "Latency for a given request per second rate") +
+  xlab("Req/s") + ylab("µs")
+```
+
+```{r plot_lat_no_hello}
+ggplot(t_data %>% filter(opts_function != "hello"),
+    aes(x = opts_req_rps, ymin = latency_us_q1pct, ymax = latency_us_q99pct, lower = latency_us_q1, middle = latency_us_med, upper = latency_us_q3)) +
+  geom_boxplot(stat = 'identity', aes(group = interaction(opts_req_rps, opts_function), color = opts_function)) +
+  scale_x_continuous(trans = 'log', n.breaks = 15) +
+  scale_y_continuous(trans = 'log', n.breaks = 15) +
   labs(title = "Latency for a given request per second rate") +
   xlab("Req/s") + ylab("µs")
 ```
