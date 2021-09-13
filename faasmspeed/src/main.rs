@@ -2,6 +2,7 @@ use anyhow::Result;
 use argh::FromArgs;
 use num_traits::Num;
 use std::time::{Duration, Instant};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 #[derive(FromArgs, Debug, Clone)]
 /// Latency testing for faasm function calls
@@ -41,6 +42,10 @@ struct Options {
     /// output in csv format
     #[argh(switch, short = 'c')]
     csv: bool,
+
+    /// monitoring host[s] to connect to, separated by ;
+    #[argh(option, short = 'm', default = "String::from(\"\")")]
+    monitoring_hosts: String,
 
     /// faasm function input data pool (repeating, must be valid contents for a JSON string)
     #[argh(positional)]
@@ -111,12 +116,27 @@ async fn async_main(opts: &'static Options) -> Result<()> {
     if opts.oneshot {
         return Ok(());
     }
+    let mut mhosts = Vec::new();
+    for host in opts
+        .monitoring_hosts
+        .split(';')
+        .map(str::trim)
+        .filter(|h| !h.is_empty())
+    {
+        eprintln!("[status] Connecting to monitoring host {}", host);
+        let conn = tokio::net::TcpStream::connect(host).await?;
+        conn.set_nodelay(true)?;
+        mhosts.push(conn);
+    }
     let total_requests = (opts.requests_per_second * opts.time).ceil() as i64;
     assert!(total_requests >= 0);
     eprintln!(
         "[status] Starting the request generator, will send {} requests in total",
         total_requests
     );
+    for host in mhosts.iter_mut() {
+        host.write_u8(b'[').await?;
+    }
     let mut interval =
         tokio::time::interval(Duration::from_secs_f64(1.0 / opts.requests_per_second));
     let mut next_progress = Instant::now();
@@ -171,6 +191,17 @@ async fn async_main(opts: &'static Options) -> Result<()> {
             Err(e) => errors.push(anyhow::Error::from(e).context("Join error")),
         }
     }
+    let mut monitoring_results: Vec<String> = Vec::with_capacity(mhosts.len());
+    let mut buf = String::with_capacity(1024);
+    for host in mhosts.iter_mut() {
+        host.write_u8(b']').await?;
+        buf.clear();
+        let (hread, mut hwrite) = host.split();
+        BufReader::new(hread).read_line(&mut buf).await?;
+        monitoring_results.push(buf.clone());
+        hwrite.write_u8(b'q').await?;
+        hwrite.shutdown().await?;
+    }
 
     if opts.csv {
         println!(
@@ -187,16 +218,22 @@ async fn async_main(opts: &'static Options) -> Result<()> {
             errors.len(),
             results.len()
         );
+        for mresult in monitoring_results {
+            println!("monitor,{}", mresult);
+        }
     } else {
         println!(
             "{} errors encountered, statistics from {} results",
             errors.len(),
             results.len()
         );
+        for mresult in monitoring_results {
+            println!("Monitoring result: {}", mresult);
+        }
     }
     if !errors.is_empty() {
         for err in errors.iter().take(10) {
-            println!("{}", err);
+            eprintln!("{}", err);
         }
     }
     {

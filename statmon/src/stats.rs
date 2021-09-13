@@ -210,7 +210,7 @@ impl Stats {
             let avg = stat.value_sum.valf() / stat.value_cnt.max(1) as f64;
             write!(
                 &mut outbuf,
-                "{hp}{n},{now},{hp}{n}-min,{min},{hp}{n}-max,{max},{hp}{n}-avg,{avg},{hp}{n}-sum,{sum},{hp}{n}-cnt,{cnt},",
+                "{hp}{n},{now},{hp}{n}_min,{min},{hp}{n}_max,{max},{hp}{n}_avg,{avg},{hp}{n}_sum,{sum},{hp}{n}_cnt,{cnt},",
                 hp = self.host_prefix,
                 n = stat.name,
                 now = stat.value_now,

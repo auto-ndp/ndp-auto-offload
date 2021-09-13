@@ -65,6 +65,7 @@ async fn async_main(opts: &'static Options) -> Result<()> {
         opts.port,
     ))
     .await?;
+    eprintln!("[status] Listening on port {}", opts.port);
     loop {
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_millis(250));
