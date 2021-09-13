@@ -219,7 +219,7 @@ async fn async_main(opts: &'static Options) -> Result<()> {
             results.len()
         );
         for mresult in monitoring_results {
-            println!("monitor,{}", mresult);
+            println!("monitor,{}", mresult.trim());
         }
     } else {
         println!(
@@ -228,7 +228,7 @@ async fn async_main(opts: &'static Options) -> Result<()> {
             results.len()
         );
         for mresult in monitoring_results {
-            println!("Monitoring result: {}", mresult);
+            println!("Monitoring result: {}", mresult.trim());
         }
     }
     if !errors.is_empty() {
