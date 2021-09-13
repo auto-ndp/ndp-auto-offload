@@ -4,6 +4,7 @@ use parking_lot::lock_api::RawMutex;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+mod cpustat;
 mod stats;
 use crate::stats::Stats;
 
@@ -13,6 +14,9 @@ struct Options {
     /// port to listen on
     #[argh(option, short = 'p', default = "8125")]
     port: u16,
+    /// port to listen on
+    #[argh(option, short = 'x', default = "String::from(\"local_\")")]
+    host_prefix: String,
 }
 
 static STATS: parking_lot::Mutex<Stats> =
@@ -46,7 +50,7 @@ async fn conn_handler(mut conn: tokio::net::TcpStream) -> Result<()> {
                 let stats = STATS.lock().stat_packet();
                 wc.write_all(stats.as_bytes()).await?;
             }
-            u => return Err(anyhow::anyhow!("Unknown command byte {}", u)),
+            u => eprintln!("Warning: {}", anyhow::anyhow!("Unknown command byte {}", u)),
         }
     }
     wc.shutdown().await?;
@@ -54,6 +58,7 @@ async fn conn_handler(mut conn: tokio::net::TcpStream) -> Result<()> {
 }
 
 async fn async_main(opts: &'static Options) -> Result<()> {
+    STATS.lock().host_prefix = opts.host_prefix.clone();
     STATS.lock().update()?;
     let sock = tokio::net::TcpListener::bind(std::net::SocketAddrV4::new(
         std::net::Ipv4Addr::new(0, 0, 0, 0),

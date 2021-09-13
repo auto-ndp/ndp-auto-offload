@@ -3,6 +3,8 @@ use std::fmt::Write as _;
 use std::fs::{File, OpenOptions};
 use std::io::{prelude::*, SeekFrom};
 
+use crate::cpustat::{CpuStat, CpuTotals};
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum StatValue {
     Float(f64),
@@ -89,6 +91,16 @@ pub enum WhichStat {
     MemActive,
     MemInactive,
     MemAnonHugePages,
+    CpumsUser,
+    CpumsNice,
+    CpumsSystem,
+    CpumsIdle,
+    CpumsIowait,
+    CpumsIrq,
+    CpumsSoftirq,
+    ContextSwitches,
+    ProcsRunning,
+    ProcsBlocked,
     //
     TotalStatCount,
 }
@@ -148,13 +160,25 @@ const STATS_INIT: [Stat; WhichStat::TotalStatCount as usize] = [
     Stat::int("mem_active"),
     Stat::int("mem_inactive"),
     Stat::int("mem_anonhp"),
+    Stat::int("cpums_user"),
+    Stat::int("cpums_nice"),
+    Stat::int("cpums_system"),
+    Stat::int("cpums_idle"),
+    Stat::int("cpums_iowait"),
+    Stat::int("cpums_irq"),
+    Stat::int("cpums_softirq"),
+    Stat::int("cswitches"),
+    Stat::int("procs_running"),
+    Stat::int("procs_blocked"),
 ];
 
 pub struct Stats {
     in_range: bool,
+    pub host_prefix: String,
     rdbuf: String,
     fp_loadavg: Option<File>,
     fp_meminfo: Option<File>,
+    cpu: CpuStat,
     stats: [Stat; WhichStat::TotalStatCount as usize],
 }
 
@@ -162,9 +186,11 @@ impl Stats {
     pub const fn new() -> Self {
         Self {
             in_range: false,
+            host_prefix: String::new(),
             rdbuf: String::new(),
             fp_loadavg: None,
             fp_meminfo: None,
+            cpu: CpuStat::new(),
             stats: STATS_INIT,
         }
     }
@@ -184,11 +210,14 @@ impl Stats {
             let avg = stat.value_sum.valf() / stat.value_cnt.max(1) as f64;
             write!(
                 &mut outbuf,
-                "{n},{now},{n}-min,{min},{n}-max,{max},{n}-avg,{avg},",
+                "{hp}{n},{now},{hp}{n}-min,{min},{hp}{n}-max,{max},{hp}{n}-avg,{avg},{hp}{n}-sum,{sum},{hp}{n}-cnt,{cnt},",
+                hp = self.host_prefix,
                 n = stat.name,
                 now = stat.value_now,
                 min = stat.value_min,
                 max = stat.value_max,
+                sum = stat.value_sum,
+                cnt = stat.value_cnt,
                 avg = avg,
             )
             .unwrap();
@@ -204,6 +233,40 @@ impl Stats {
         }
         self.upd_loadavg()?;
         self.upd_meminfo()?;
+        self.cpu.update(&mut self.rdbuf)?;
+        {
+            let cpums = self.cpu.cpu_totals_ms();
+            self.stats[WhichStat::CpumsUser as usize]
+                .value_now
+                .seti(cpums[CpuTotals::UserMode as usize] as i64);
+            self.stats[WhichStat::CpumsNice as usize]
+                .value_now
+                .seti(cpums[CpuTotals::NiceUserMode as usize] as i64);
+            self.stats[WhichStat::CpumsSystem as usize]
+                .value_now
+                .seti(cpums[CpuTotals::SystemMode as usize] as i64);
+            self.stats[WhichStat::CpumsIdle as usize]
+                .value_now
+                .seti(cpums[CpuTotals::Idle as usize] as i64);
+            self.stats[WhichStat::CpumsIowait as usize]
+                .value_now
+                .seti(cpums[CpuTotals::IoWait as usize] as i64);
+            self.stats[WhichStat::CpumsIrq as usize]
+                .value_now
+                .seti(cpums[CpuTotals::Irq as usize] as i64);
+            self.stats[WhichStat::CpumsSoftirq as usize]
+                .value_now
+                .seti(cpums[CpuTotals::SoftIrq as usize] as i64);
+            self.stats[WhichStat::ContextSwitches as usize]
+                .value_now
+                .seti(self.cpu.context_switches() as i64);
+            self.stats[WhichStat::ProcsRunning as usize]
+                .value_now
+                .seti(self.cpu.procs_running() as i64);
+            self.stats[WhichStat::ProcsBlocked as usize]
+                .value_now
+                .seti(self.cpu.procs_io_blocked() as i64);
+        }
         if self.in_range {
             self.stats.iter_mut().for_each(Stat::update_aggregate);
         }
@@ -271,12 +334,7 @@ impl Stats {
         self.rdbuf.clear();
         fp_meminfo.read_to_string(&mut self.rdbuf)?;
         fp_meminfo.seek(SeekFrom::Start(0))?;
-        for line in self
-            .rdbuf
-            .lines()
-            .map(|l| l.trim())
-            .filter(|l| !l.is_empty())
-        {
+        for line in self.rdbuf.lines().map(str::trim).filter(|l| !l.is_empty()) {
             let (var, bytes) = Self::parse_meminfo_line(line)?;
             match var {
                 "MemTotal" => {

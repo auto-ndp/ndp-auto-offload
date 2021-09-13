@@ -10,6 +10,7 @@ tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "macros", "
 argh = "0.1"
 anyhow = "1"
 parking_lot = "0.11.2"
+libc = "0.2.101"
 
 [profile.release]
 lto = "fat"
