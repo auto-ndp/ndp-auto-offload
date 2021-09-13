@@ -192,7 +192,7 @@ async fn async_main(opts: &'static Options) -> Result<()> {
         }
     }
     let mut monitoring_results: Vec<String> = Vec::with_capacity(mhosts.len());
-    let mut buf = String::with_capacity(1024);
+    let mut buf = String::with_capacity(8192);
     for host in mhosts.iter_mut() {
         host.write_u8(b']').await?;
         buf.clear();

@@ -14,9 +14,12 @@ struct Options {
     /// port to listen on
     #[argh(option, short = 'p', default = "8125")]
     port: u16,
-    /// port to listen on
+    /// hostname prefix for stats
     #[argh(option, short = 'x', default = "String::from(\"local_\")")]
     host_prefix: String,
+    /// network interface name to monitor
+    #[argh(option, short = 'm')]
+    netdev: String,
 }
 
 static STATS: parking_lot::Mutex<Stats> =
@@ -58,8 +61,13 @@ async fn conn_handler(mut conn: tokio::net::TcpStream) -> Result<()> {
 }
 
 async fn async_main(opts: &'static Options) -> Result<()> {
-    STATS.lock().host_prefix = opts.host_prefix.clone();
-    STATS.lock().update()?;
+    {
+        let mut stats = STATS.lock();
+        stats.host_prefix = opts.host_prefix.clone();
+        stats.net_iface = opts.netdev.clone();
+        stats.update()?;
+        stats.update()?;
+    }
     let sock = tokio::net::TcpListener::bind(std::net::SocketAddrV4::new(
         std::net::Ipv4Addr::new(0, 0, 0, 0),
         opts.port,

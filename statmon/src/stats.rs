@@ -101,6 +101,10 @@ pub enum WhichStat {
     ContextSwitches,
     ProcsRunning,
     ProcsBlocked,
+    NetRxBytes,
+    NetRxErrors,
+    NetTxBytes,
+    NetTxErrors,
     //
     TotalStatCount,
 }
@@ -170,16 +174,26 @@ const STATS_INIT: [Stat; WhichStat::TotalStatCount as usize] = [
     Stat::int("cswitches"),
     Stat::int("procs_running"),
     Stat::int("procs_blocked"),
+    Stat::int("net_rx_bytes"),
+    Stat::int("net_rx_errors"),
+    Stat::int("net_tx_bytes"),
+    Stat::int("net_tx_errors"),
 ];
 
 pub struct Stats {
     in_range: bool,
     pub host_prefix: String,
+    pub net_iface: String,
     rdbuf: String,
     fp_loadavg: Option<File>,
     fp_meminfo: Option<File>,
+    fp_net: Option<File>,
     cpu: CpuStat,
     stats: [Stat; WhichStat::TotalStatCount as usize],
+    net_rx_ref: i64,
+    net_rxe_ref: i64,
+    net_tx_ref: i64,
+    net_txe_ref: i64,
 }
 
 impl Stats {
@@ -187,11 +201,17 @@ impl Stats {
         Self {
             in_range: false,
             host_prefix: String::new(),
+            net_iface: String::new(),
             rdbuf: String::new(),
             fp_loadavg: None,
             fp_meminfo: None,
+            fp_net: None,
             cpu: CpuStat::new(),
             stats: STATS_INIT,
+            net_rx_ref: 0,
+            net_rxe_ref: 0,
+            net_tx_ref: 0,
+            net_txe_ref: 0,
         }
     }
 
@@ -205,7 +225,7 @@ impl Stats {
     }
 
     pub fn stat_packet(&self) -> String {
-        let mut outbuf = String::with_capacity(1024);
+        let mut outbuf = String::with_capacity(8192);
         for stat in self.stats.iter() {
             let avg = stat.value_sum.valf() / stat.value_cnt.max(1) as f64;
             write!(
@@ -233,6 +253,7 @@ impl Stats {
         }
         self.upd_loadavg()?;
         self.upd_meminfo()?;
+        self.upd_net()?;
         self.cpu.update(&mut self.rdbuf)?;
         {
             let cpums = self.cpu.cpu_totals_ms();
@@ -364,6 +385,79 @@ impl Stats {
                 }
                 _ => {}
             }
+        }
+        Ok(())
+    }
+
+    fn upd_net(&mut self) -> Result<()> {
+        if self.fp_net.is_none() {
+            self.fp_net = Some(OpenOptions::new().read(true).open("/proc/net/dev")?);
+            if self.net_iface.is_empty() {
+                panic!("Unset network interface to monitor");
+            }
+            self.net_iface.push(':');
+        }
+        let fp_net = self.fp_net.as_mut().unwrap();
+        self.rdbuf.clear();
+        fp_net.read_to_string(&mut self.rdbuf)?;
+        fp_net.seek(SeekFrom::Start(0))?;
+        let line = self
+            .rdbuf
+            .lines()
+            .map(str::trim)
+            .find(|l| l.starts_with(self.net_iface.as_str()))
+            .expect("Couldn't find specified network interface");
+        let fields = line
+            .split_whitespace()
+            .map(str::trim)
+            .filter(|f| !f.is_empty());
+        // Inter-|   Receive                                                |  Transmit
+        //  face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
+        //    lo: 16445201   19918    0    0    0     0          0         0 16445201   19918    0    0    0     0       0          0
+        //f#:  0     1          2     3    4    5     6          7         8 9            10   11    12   13  14     15        16
+        let rx: i64 = fields
+            .clone()
+            .nth(1)
+            .expect("Unexpected /proc/net/dev format")
+            .parse()?;
+        self.stats[WhichStat::NetRxBytes as usize]
+            .value_now
+            .seti(rx - self.net_rx_ref);
+        self.net_rx_ref = rx;
+
+        let rxe: i64 = fields
+            .clone()
+            .nth(3)
+            .expect("Unexpected /proc/net/dev format")
+            .parse()?;
+        self.stats[WhichStat::NetRxErrors as usize]
+            .value_now
+            .seti(rxe - self.net_rxe_ref);
+        self.net_rxe_ref = rxe;
+        let tx: i64 = fields
+            .clone()
+            .nth(9)
+            .expect("Unexpected /proc/net/dev format")
+            .parse()?;
+        self.stats[WhichStat::NetTxBytes as usize]
+            .value_now
+            .seti(tx - self.net_tx_ref);
+        self.net_tx_ref = tx;
+        let txe: i64 = fields
+            .clone()
+            .nth(10)
+            .expect("Unexpected /proc/net/dev format")
+            .parse()?;
+        self.stats[WhichStat::NetTxErrors as usize]
+            .value_now
+            .seti(txe - self.net_txe_ref);
+        self.net_txe_ref = txe;
+        let fcnt = fields.count();
+        if fcnt != 17 {
+            panic!(
+                "Unexpected /proc/net/dev format: got {} fields instead of expected 17",
+                fcnt
+            );
         }
         Ok(())
     }
