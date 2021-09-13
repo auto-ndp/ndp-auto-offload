@@ -102,7 +102,7 @@ async fn async_main(opts: &'static Options) -> Result<()> {
 
 fn main() -> Result<()> {
     let opts: &'static Options = Box::leak(Box::new(argh::from_env()));
-    eprintln!("[status] Parsed options");
+    eprintln!("[status] Parsed options: {:?}", opts);
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_time()
         .enable_io()
