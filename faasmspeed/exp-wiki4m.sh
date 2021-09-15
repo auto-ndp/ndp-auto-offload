@@ -14,7 +14,7 @@ TIMEOUT=45000
 HOST=http://127.0.0.1:8080
 MONITOR_HOSTS='localhost:8125;luna:8125'
 #FAASMSPEED=echo
-DATASET=$(seq --format='wiki4m/%03.0f' 0 255)
+DATASET=$(seq --format='wiki4m/frag_%03.0f' 0 255)
 
 for RPS in ${RPS_LIST}
 do
