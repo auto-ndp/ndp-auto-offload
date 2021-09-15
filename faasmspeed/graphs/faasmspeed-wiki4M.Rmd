@@ -1,7 +1,7 @@
 ---
-title: "Faasm latency measurements"
+title: "Faasm latency measurements - wiki4M dataset"
 author: "Jakub Szewczyk"
-date: "08-09-2021"
+date: "15-09-2021"
 output:
   html_document:
     toc: yes
@@ -16,8 +16,8 @@ library(scales)
 knitr::opts_chunk$set(echo = FALSE)
 ```
 
-```{r read_csv, include=FALSE, cache=TRUE, cache.extra = file.info("table.csv")}
-raw_csv <- import('table.csv')
+```{r read_csv, include=FALSE, cache=TRUE, cache.extra = file.info("wtable.csv")}
+raw_csv <- import('wtable.csv')
 ```
 
 ```{r tidy_bench}
@@ -46,7 +46,7 @@ ggplot(t_data,
 
 ```{r plot_lat_zoom}
 plot_scale <- 1.0/1000.0
-ggplot(t_data %>% filter(avg_rps_avg_rps > 250),
+ggplot(t_data %>% filter(avg_rps_avg_rps > 60),
     aes(x = avg_rps_avg_rps, ymin = latency_us_q1pct*plot_scale, ymax = latency_us_q99pct*plot_scale, lower = latency_us_q1*plot_scale, middle = latency_us_med*plot_scale, upper = latency_us_q3*plot_scale)) +
   geom_boxplot(stat = 'identity', aes(group = interaction(avg_rps_avg_rps, opts_function), color = opts_function)) +
   scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
@@ -68,7 +68,7 @@ ggplot(t_data,
 
 ```{r plot_lat_smooth_zoom}
 plot_scale <- 1.0/1000.0
-ggplot(t_data %>% filter(avg_rps_avg_rps > 250),
+ggplot(t_data %>% filter(avg_rps_avg_rps > 60),
     aes(x = avg_rps_avg_rps, ymin = latency_us_q1*plot_scale, y = latency_us_med*plot_scale, ymax = latency_us_q3*plot_scale)) +
   geom_smooth(stat = 'identity', aes(group = interaction(opts_function), color = opts_function)) +
   scale_x_continuous(trans = 'identity', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +

@@ -3,6 +3,7 @@
 # Edit at https://www.toptal.com/developers/gitignore?templates=linux,windows,c++,rust,cmake
 
 *.pdf
+*.html
 memspeed-graphs/combined.json
 
 target/
