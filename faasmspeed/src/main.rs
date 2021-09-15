@@ -306,7 +306,7 @@ where
     let q99: N = sorted_data.clone().nth(99 * n / 100).unwrap_or(zero);
     let cnt: N = N::try_from(n.max(1)).unwrap_or_else(|_| N::one());
     let avg: N = sum / cnt;
-    let variance: N = sorted_data.map(|x| (x - avg) * (x - avg)).sum() / cnt;
+    let variance: N = sorted_data.map(|x| (x - avg) * (x - avg)).sum::<N>() / cnt;
     let stddev = (variance.try_into().unwrap_or(0usize) as f64).sqrt();
     if csv {
         let fields: [(&'static str, &dyn std::fmt::Display); 9] = [
