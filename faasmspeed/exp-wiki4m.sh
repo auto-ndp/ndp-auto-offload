@@ -30,7 +30,7 @@ for RPS in ${RPS_LIST}
 do
     echo "*** Wordcount-NDP RPS=${RPS}"
     # Warm-up burst
-    ${FAASMSPEED} -h ${HOST} -u ndp -f wordcount_manual_ndp -c -x ${TIMEOUT} -t ${WARMUP_TIME} -r ${RPS} -p ${PARALLELISM} ${DATASET} 2>&1 > /dev/null
+    ${FAASMSPEED} -h ${HOST} -u ndp -f wordcount -N -c -x ${TIMEOUT} -t ${WARMUP_TIME} -r ${RPS} -p ${PARALLELISM} ${DATASET} 2>&1 > /dev/null
     sleep 0.2
-    ${FAASMSPEED} -h ${HOST} -u ndp -f wordcount_manual_ndp -c -m ${MONITOR_HOSTS} -x ${TIMEOUT} -t ${TIME_PER} -r ${RPS} -p ${PARALLELISM} ${DATASET} >> $OUTFILE
+    ${FAASMSPEED} -h ${HOST} -u ndp -f wordcount -N -c -m ${MONITOR_HOSTS} -x ${TIMEOUT} -t ${TIME_PER} -r ${RPS} -p ${PARALLELISM} ${DATASET} >> $OUTFILE
 done

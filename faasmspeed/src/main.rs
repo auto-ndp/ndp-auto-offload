@@ -43,6 +43,10 @@ struct Options {
     #[argh(switch, short = 'c')]
     csv: bool,
 
+    /// forbid ndp offloading
+    #[argh(switch, short = 'N')]
+    forbid_ndp: bool,
+
     /// monitoring host[s] to connect to, separated by ;
     #[argh(option, short = 'm', default = "String::from(\"\")")]
     monitoring_hosts: String,
@@ -81,7 +85,10 @@ async fn async_main(opts: &'static Options) -> Result<()> {
             make_request(
                 &client,
                 &opts.url,
-                Box::leak(make_json_call(&opts.user, &opts.function, data).into_boxed_str()),
+                Box::leak(
+                    make_json_call(&opts.user, &opts.function, data, opts.forbid_ndp)
+                        .into_boxed_str(),
+                ),
                 opts.timeout,
             )
         })
@@ -346,10 +353,13 @@ fn make_client() -> Result<reqwest::Client> {
         .build()?)
 }
 
-fn make_json_call(user: &str, function: &str, input_data: &str) -> String {
+fn make_json_call(user: &str, function: &str, input_data: &str, forbid_ndp: bool) -> String {
     format!(
-        r#"{{"user":"{}","function":"{}","input_data":"{}"}}"#,
-        user, function, input_data
+        r#"{{"user":"{}","function":"{}","input_data":"{}","forbid_ndp":{}}}"#,
+        user,
+        function,
+        input_data,
+        if forbid_ndp { "true" } else { "false" }
     )
 }
 

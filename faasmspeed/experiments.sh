@@ -39,7 +39,7 @@ for RPS in ${RPS_LIST}
 do
     echo "*** Wordcount-NDP RPS=${RPS}"
     # Warm-up burst
-    ${FAASMSPEED} -h ${HOST} -u ndp -f wordcount_manual_ndp frankenmod.txt -c -x ${TIMEOUT} -t ${WARMUP_TIME} -r ${RPS} -p ${PARALLELISM} 2>&1 > /dev/null
+    ${FAASMSPEED} -h ${HOST} -u ndp -f wordcount -N frankenmod.txt -c -x ${TIMEOUT} -t ${WARMUP_TIME} -r ${RPS} -p ${PARALLELISM} 2>&1 > /dev/null
     sleep 0.2
-    ${FAASMSPEED} -h ${HOST} -u ndp -f wordcount_manual_ndp frankenmod.txt -c -m ${MONITOR_HOSTS} -x ${TIMEOUT} -t ${TIME_PER} -r ${RPS} -p ${PARALLELISM} >> $OUTFILE
+    ${FAASMSPEED} -h ${HOST} -u ndp -f wordcount -N frankenmod.txt -c -m ${MONITOR_HOSTS} -x ${TIMEOUT} -t ${TIME_PER} -r ${RPS} -p ${PARALLELISM} >> $OUTFILE
 done
