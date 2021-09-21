@@ -98,6 +98,16 @@ ggplot(t_data %>% filter(avg_rps_avg_rps>50)) +
   xlab("Req/s") + ylab("count/sec")
 ```
 
+```{r plot_cpu_cswitches_req}
+ggplot(t_data %>% filter(avg_rps_avg_rps>50)) +
+  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_computecswitches_sum / (total_requests), group = interaction(opts_function,opts_ndp), color = interaction('compute',opts_function,opts_ndp))) +
+  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_storagecswitches_sum / (total_requests), group = interaction(opts_function,opts_ndp), color = interaction('storage',opts_function,opts_ndp))) +
+  scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
+  scale_y_continuous(trans = 'identity') +
+  labs(title = "Average context switches per request") +
+  xlab("Req/s") + ylab("count/request")
+```
+
 ```{r plot_cpu_ms_no_hello}
 ggplot(t_data) +
   geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = (monitor_computecpums_user_sum + monitor_computecpums_system_sum + monitor_computecpums_nice_sum) / total_requests, group = interaction(opts_function,opts_ndp), color = interaction('compute',opts_function,opts_ndp))) +

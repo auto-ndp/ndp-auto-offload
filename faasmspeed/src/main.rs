@@ -1,6 +1,7 @@
 use anyhow::Result;
 use argh::FromArgs;
 use num_traits::Num;
+use rand_core::RngCore;
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
@@ -43,9 +44,9 @@ struct Options {
     #[argh(switch, short = 'c')]
     csv: bool,
 
-    /// forbid ndp offloading
-    #[argh(switch, short = 'N')]
-    forbid_ndp: bool,
+    /// ndp offloading fraction [0.0-1.0]
+    #[argh(option, short = 'N', default = "1.0")]
+    offload_frac: f32,
 
     /// monitoring host[s] to connect to, separated by ;
     #[argh(option, short = 'm', default = "String::from(\"\")")]
@@ -78,19 +79,29 @@ struct RequestResult {
 async fn async_main(opts: &'static Options) -> Result<()> {
     let client = make_client()?;
     eprintln!("[status] Created an HTTP client");
+    // (no ndp, ndp)
     let request_pool: Vec<_> = opts
         .input_data
         .iter()
         .map(|data| {
-            make_request(
-                &client,
-                &opts.url,
-                Box::leak(
-                    make_json_call(&opts.user, &opts.function, data, opts.forbid_ndp)
-                        .into_boxed_str(),
-                ),
-                opts.timeout,
-            )
+            Ok((
+                make_request(
+                    &client,
+                    &opts.url,
+                    Box::leak(
+                        make_json_call(&opts.user, &opts.function, data, true).into_boxed_str(),
+                    ),
+                    opts.timeout,
+                )?,
+                make_request(
+                    &client,
+                    &opts.url,
+                    Box::leak(
+                        make_json_call(&opts.user, &opts.function, data, false).into_boxed_str(),
+                    ),
+                    opts.timeout,
+                )?,
+            ))
         })
         .collect::<Result<Vec<_>>>()?;
     eprintln!(
@@ -100,7 +111,13 @@ async fn async_main(opts: &'static Options) -> Result<()> {
     );
     eprintln!("[status] Making a test request");
     {
-        let test_request = request_pool[0].try_clone().unwrap();
+        let test_request = if opts.offload_frac > 0.5 {
+            &request_pool[0].1
+        } else {
+            &request_pool[0].0
+        }
+        .try_clone()
+        .unwrap();
         let pre_request = Instant::now();
         let response = client.execute(test_request).await?.error_for_status()?;
         let status = response.status();
@@ -151,9 +168,22 @@ async fn async_main(opts: &'static Options) -> Result<()> {
     let mut handles: Vec<tokio::task::JoinHandle<Result<RequestResult>>> =
         Vec::with_capacity(total_requests as usize);
     let reference_time = Instant::now();
+    let mut seq_gen = rand_pcg::Lcg64Xsh32::new(0xcafef00dd15ea5e5, 0xa02bdbf7bb3c0a7);
+    let mut rng_buf = 0u32.to_le_bytes();
+    let ndp_threshold = ((opts.offload_frac as f64) * (u32::MAX as f64)) as u32;
+    let mut ndp_reqs = 0i64;
     for request_id in 0..total_requests {
         interval.tick().await;
-        let request = request_pool[which_request].try_clone().unwrap();
+        seq_gen.fill_bytes(&mut rng_buf[..]);
+        let allow_ndp = u32::from_le_bytes(rng_buf) < ndp_threshold;
+        let request = if allow_ndp {
+            ndp_reqs += 1;
+            &request_pool[which_request].1
+        } else {
+            &request_pool[which_request].0
+        }
+        .try_clone()
+        .unwrap();
         let client_ref = client.clone();
         handles.push(tokio::spawn(async move {
             let start_time = reference_time.elapsed().as_micros();
@@ -212,11 +242,12 @@ async fn async_main(opts: &'static Options) -> Result<()> {
 
     if opts.csv {
         println!(
-            "opts,host,{},user,{},function,{},ndp,{},req-rps,{:.1},req-time,{:.1},input-data-0,{}",
+            "opts,host,{},user,{},function,{},ndp,{:.2},actual-ndp,{:.6},req-rps,{:.1},req-time,{:.1},input-data-0,{}",
             opts.url,
             opts.user,
             opts.function,
-            !opts.forbid_ndp,
+            opts.offload_frac,
+            ndp_reqs as f64 / total_requests as f64,
             opts.requests_per_second,
             opts.time,
             opts.input_data[0]
