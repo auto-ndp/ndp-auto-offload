@@ -109,9 +109,9 @@ async fn async_main(opts: &'static Options) -> Result<()> {
         let bytecount = if opts.oneshot {
             bytes.len()
         } else {
-            80.min(bytes.len())
+            60.min(bytes.len())
         };
-        let first_bytes = String::from_utf8_lossy(&bytes[0..bytecount]);
+        let first_bytes = String::from_utf8_lossy(&bytes[0..bytecount]).replace('\n', "\\\\");
         eprintln!(
             "[status] Test request success status {} after {:.3} ms, first {} bytes of content: {}",
             status.as_str(),

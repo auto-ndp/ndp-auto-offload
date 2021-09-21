@@ -37,7 +37,7 @@ t_data <- raw_csv %>%
 plot_scale <- 1.0/1000.0
 ggplot(t_data,
     aes(x = avg_rps_avg_rps, ymin = latency_us_q1pct*plot_scale, ymax = latency_us_q99pct*plot_scale, lower = latency_us_q1*plot_scale, middle = latency_us_med*plot_scale, upper = latency_us_q3*plot_scale)) +
-  geom_boxplot(stat = 'identity', aes(group = interaction(avg_rps_avg_rps, opts_function), color = opts_function)) +
+  geom_boxplot(stat = 'identity', aes(group = interaction(avg_rps_avg_rps, opts_function, opts_ndp), color = interaction(opts_function,opts_ndp))) +
   scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
   scale_y_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
   labs(title = "Latency for a given request per second rate") +
@@ -46,9 +46,9 @@ ggplot(t_data,
 
 ```{r plot_lat_zoom}
 plot_scale <- 1.0/1000.0
-ggplot(t_data %>% filter(avg_rps_avg_rps > 250),
+ggplot(t_data %>% filter(avg_rps_avg_rps > 150),
     aes(x = avg_rps_avg_rps, ymin = latency_us_q1pct*plot_scale, ymax = latency_us_q99pct*plot_scale, lower = latency_us_q1*plot_scale, middle = latency_us_med*plot_scale, upper = latency_us_q3*plot_scale)) +
-  geom_boxplot(stat = 'identity', aes(group = interaction(avg_rps_avg_rps, opts_function), color = opts_function)) +
+  geom_boxplot(stat = 'identity', aes(group = interaction(avg_rps_avg_rps, opts_function, opts_ndp), color = interaction(opts_function,opts_ndp))) +
   scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
   scale_y_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
   labs(title = "Latency for a given request per second rate") +
@@ -59,7 +59,8 @@ ggplot(t_data %>% filter(avg_rps_avg_rps > 250),
 plot_scale <- 1.0/1000.0
 ggplot(t_data,
     aes(x = avg_rps_avg_rps, ymin = latency_us_q1*plot_scale, y = latency_us_med*plot_scale, ymax = latency_us_q3*plot_scale)) +
-  geom_smooth(stat = 'identity', aes(group = interaction(opts_function), color = opts_function)) +
+  geom_smooth(stat = 'identity', aes(group = interaction(opts_function,opts_ndp), color = interaction(opts_function,opts_ndp))) +
+  geom_line(stat = 'identity', aes(y=errors_count, group = interaction(opts_function,opts_ndp), color = interaction(opts_function,opts_ndp))) +
   scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
   scale_y_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
   labs(title = "Latency for a given request per second rate") +
@@ -68,9 +69,9 @@ ggplot(t_data,
 
 ```{r plot_lat_smooth_zoom}
 plot_scale <- 1.0/1000.0
-ggplot(t_data %>% filter(avg_rps_avg_rps > 250),
+ggplot(t_data %>% filter(avg_rps_avg_rps > 150),
     aes(x = avg_rps_avg_rps, ymin = latency_us_q1*plot_scale, y = latency_us_med*plot_scale, ymax = latency_us_q3*plot_scale)) +
-  geom_smooth(stat = 'identity', aes(group = interaction(opts_function), color = opts_function)) +
+  geom_smooth(stat = 'identity', aes(group = interaction(opts_function,opts_ndp), color = interaction(opts_function,opts_ndp))) +
   scale_x_continuous(trans = 'identity', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
   scale_y_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
   labs(title = "Latency for a given request per second rate") +
@@ -79,8 +80,8 @@ ggplot(t_data %>% filter(avg_rps_avg_rps > 250),
 
 ```{r plot_cpu_load_no_hello}
 ggplot(t_data) +
-  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_computeprocs_running_avg, group = interaction(opts_function), color = interaction('compute',opts_function))) +
-  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_storageprocs_running_avg, group = interaction(opts_function), color = interaction('storage',opts_function))) +
+  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_computeprocs_running_avg, group = interaction(opts_function,opts_ndp), color = interaction('compute',opts_function,opts_ndp))) +
+  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_storageprocs_running_avg, group = interaction(opts_function,opts_ndp), color = interaction('storage',opts_function,opts_ndp))) +
   scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
   scale_y_continuous(trans = 'identity') +
   labs(title = "Average RUNNING threads") +
@@ -89,8 +90,8 @@ ggplot(t_data) +
 
 ```{r plot_cpu_cswitches}
 ggplot(t_data %>% filter(avg_rps_avg_rps>50)) +
-  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_computecswitches_sum / (opts_req_time), group = interaction(opts_function), color = interaction('compute',opts_function))) +
-  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_storagecswitches_sum / (opts_req_time), group = interaction(opts_function), color = interaction('storage',opts_function))) +
+  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_computecswitches_sum / (opts_req_time), group = interaction(opts_function,opts_ndp), color = interaction('compute',opts_function,opts_ndp))) +
+  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_storagecswitches_sum / (opts_req_time), group = interaction(opts_function,opts_ndp), color = interaction('storage',opts_function,opts_ndp))) +
   scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
   scale_y_continuous(trans = 'identity') +
   labs(title = "Average context switches per second") +
@@ -99,8 +100,8 @@ ggplot(t_data %>% filter(avg_rps_avg_rps>50)) +
 
 ```{r plot_cpu_ms_no_hello}
 ggplot(t_data) +
-  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = (monitor_computecpums_user_sum + monitor_computecpums_system_sum + monitor_computecpums_nice_sum) / total_requests, group = interaction(opts_function), color = interaction('compute',opts_function))) +
-  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = (monitor_storagecpums_user_sum + monitor_storagecpums_system_sum + monitor_storagecpums_nice_sum) / total_requests, group = interaction(opts_function), color = interaction('storage',opts_function))) +
+  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = (monitor_computecpums_user_sum + monitor_computecpums_system_sum + monitor_computecpums_nice_sum) / total_requests, group = interaction(opts_function,opts_ndp), color = interaction('compute',opts_function,opts_ndp))) +
+  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = (monitor_storagecpums_user_sum + monitor_storagecpums_system_sum + monitor_storagecpums_nice_sum) / total_requests, group = interaction(opts_function,opts_ndp), color = interaction('storage',opts_function,opts_ndp))) +
   scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
   scale_y_continuous(trans = 'identity') +
   labs(title = "Average CPU ms per request (user+system)") +
@@ -109,8 +110,8 @@ ggplot(t_data) +
 
 ```{r plot_mem_active_no_hello}
 ggplot(t_data) +
-  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_computemem_active_avg, group = interaction(opts_function), color = interaction('compute',opts_function))) +
-#  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_storagemem_active_avg, group = interaction(opts_function), color = interaction('storage',opts_function))) +
+  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_computemem_active_avg, group = interaction(opts_function,opts_ndp), color = interaction('compute',opts_function,opts_ndp))) +
+  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_storagemem_active_avg, group = interaction(opts_function,opts_ndp), color = interaction('storage',opts_function,opts_ndp))) +
   scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
   scale_y_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
   labs(title = "Average Active memory per request") +
@@ -119,8 +120,8 @@ ggplot(t_data) +
 
 ```{r plot_net_tx_bytes_no_hello}
 ggplot(t_data) +
-  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_computenet_tx_bytes_sum / total_requests, group = interaction(opts_function), color = interaction('compute',opts_function))) +
-  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_storagenet_tx_bytes_sum / total_requests, group = interaction(opts_function), color = interaction('storage',opts_function))) +
+  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_computenet_tx_bytes_sum / total_requests, group = interaction(opts_function,opts_ndp), color = interaction('compute',opts_function,opts_ndp))) +
+  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_storagenet_tx_bytes_sum / total_requests, group = interaction(opts_function,opts_ndp), color = interaction('storage',opts_function,opts_ndp))) +
   scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
   scale_y_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
   labs(title = "Total bytes per request sent from node over network") +
@@ -129,7 +130,7 @@ ggplot(t_data) +
 
 ```{r plot_net_tx_sum_bytes_no_hello}
 ggplot(t_data) +
-  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = (monitor_computenet_tx_bytes_sum + monitor_storagenet_tx_bytes_sum) / total_requests, group = interaction(opts_function), color = opts_function)) +
+  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = (monitor_computenet_tx_bytes_sum + monitor_storagenet_tx_bytes_sum) / total_requests, group = interaction(opts_function,opts_ndp), color = interaction(opts_function,opts_ndp))) +
   scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1), expand = c(0.01, 0.01)) +
   scale_y_continuous(trans = 'identity', expand = c(0.1,0), limits = c(0, NA), label = scales::label_comma(accuracy = 1)) +
   labs(title = "Total bytes per request sent over network") +
@@ -138,7 +139,7 @@ ggplot(t_data) +
 
 ```{r plot_net_tx_sum_bytes_per_sec}
 ggplot(t_data) +
-  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = (monitor_computenet_tx_bytes_sum + monitor_storagenet_tx_bytes_sum) / (opts_req_time), group = interaction(opts_function), color = opts_function)) +
+  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = (monitor_computenet_tx_bytes_sum + monitor_storagenet_tx_bytes_sum) / (opts_req_time), group = interaction(opts_function,opts_ndp), color = interaction(opts_function,opts_ndp))) +
   scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1), expand = c(0.01, 0.01)) +
   scale_y_continuous(trans = 'identity', expand = c(0.1,0), limits = c(0, NA), label = scales::label_comma(accuracy = 1)) +
   labs(title = "Total bytes per second sent over network") +
