@@ -212,10 +212,11 @@ async fn async_main(opts: &'static Options) -> Result<()> {
 
     if opts.csv {
         println!(
-            "opts,host,{},user,{},function,{},req-rps,{:.1},req-time,{:.1},input-data-0,{}",
+            "opts,host,{},user,{},function,{},ndp,{},req-rps,{:.1},req-time,{:.1},input-data-0,{}",
             opts.url,
             opts.user,
             opts.function,
+            !opts.forbid_ndp,
             opts.requests_per_second,
             opts.time,
             opts.input_data[0]
