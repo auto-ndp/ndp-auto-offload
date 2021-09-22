@@ -18,9 +18,7 @@ knitr::opts_chunk$set(echo = FALSE)
 
 ```{r read_csv, include=FALSE, cache=TRUE, cache.extra = file.info("table.csv")}
 raw_csv <- import('table.csv')
-```
 
-```{r tidy_bench}
 t_data <- raw_csv %>%
   mutate (
     opts_host = factor(opts_host),
@@ -46,9 +44,9 @@ ggplot(t_data,
 
 ```{r plot_lat_zoom}
 plot_scale <- 1.0/1000.0
-ggplot(t_data %>% filter(avg_rps_avg_rps > 150),
+ggplot(t_data %>% filter(avg_rps_avg_rps >= 250) %>% filter(avg_rps_avg_rps <= 600),
     aes(x = avg_rps_avg_rps, ymin = latency_us_q1pct*plot_scale, ymax = latency_us_q99pct*plot_scale, lower = latency_us_q1*plot_scale, middle = latency_us_med*plot_scale, upper = latency_us_q3*plot_scale)) +
-  geom_boxplot(stat = 'identity', aes(group = interaction(avg_rps_avg_rps, opts_function, opts_ndp), color = interaction(opts_function,opts_ndp))) +
+  geom_boxplot(stat = 'identity', aes(group = interaction(avg_rps_avg_rps, opts_function, opts_ndp), color = interaction(opts_function, opts_ndp))) +
   scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
   scale_y_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
   labs(title = "Latency for a given request per second rate") +
@@ -69,7 +67,7 @@ ggplot(t_data,
 
 ```{r plot_lat_smooth_zoom}
 plot_scale <- 1.0/1000.0
-ggplot(t_data %>% filter(avg_rps_avg_rps > 150),
+ggplot(t_data %>% filter(avg_rps_avg_rps >= 250) %>% filter(avg_rps_avg_rps <= 600),
     aes(x = avg_rps_avg_rps, ymin = latency_us_q1*plot_scale, y = latency_us_med*plot_scale, ymax = latency_us_q3*plot_scale)) +
   geom_smooth(stat = 'identity', aes(group = interaction(opts_function,opts_ndp), color = interaction(opts_function,opts_ndp))) +
   scale_x_continuous(trans = 'identity', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
@@ -82,8 +80,8 @@ ggplot(t_data %>% filter(avg_rps_avg_rps > 150),
 ggplot(t_data) +
   geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_computeprocs_running_avg, group = interaction(opts_function,opts_ndp), color = interaction('compute',opts_function,opts_ndp))) +
   geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_storageprocs_running_avg, group = interaction(opts_function,opts_ndp), color = interaction('storage',opts_function,opts_ndp))) +
-  scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
-  scale_y_continuous(trans = 'identity') +
+  scale_x_continuous(trans = 'identity', breaks = breaks_pretty(n=20), label = scales::label_comma(accuracy = 1)) +
+  scale_y_continuous(trans = 'identity', breaks = breaks_pretty(n=12)) +
   labs(title = "Average RUNNING threads") +
   xlab("Req/s") + ylab("count")
 ```
@@ -92,8 +90,8 @@ ggplot(t_data) +
 ggplot(t_data %>% filter(avg_rps_avg_rps>50)) +
   geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_computecswitches_sum / (opts_req_time), group = interaction(opts_function,opts_ndp), color = interaction('compute',opts_function,opts_ndp))) +
   geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_storagecswitches_sum / (opts_req_time), group = interaction(opts_function,opts_ndp), color = interaction('storage',opts_function,opts_ndp))) +
-  scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
-  scale_y_continuous(trans = 'identity') +
+  scale_x_continuous(trans = 'identity', breaks = breaks_pretty(n=20), label = scales::label_comma(accuracy = 1)) +
+  scale_y_continuous(trans = 'identity', breaks = breaks_pretty(n=12)) +
   labs(title = "Average context switches per second") +
   xlab("Req/s") + ylab("count/sec")
 ```
@@ -154,4 +152,20 @@ ggplot(t_data) +
   scale_y_continuous(trans = 'identity', expand = c(0.1,0), limits = c(0, NA), label = scales::label_comma(accuracy = 1)) +
   labs(title = "Total bytes per second sent over network") +
   xlab("Req/s") + ylab("bytes/second")
+```
+
+```{r plot_xverify_rps}
+ggplot(t_data) +
+  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = opts_req_rps, group = interaction(opts_function,opts_ndp), color = interaction(opts_function,opts_ndp))) +
+  scale_x_continuous(trans = 'identity', label = scales::label_comma(accuracy = 1), expand = c(0.01, 0.01)) +
+  scale_y_continuous(trans = 'identity', expand = c(0.1,0), limits = c(0, NA), label = scales::label_comma(accuracy = 1)) +
+  labs(title = "Xverify RPS/RPS") +
+  xlab("Real Req/s") + ylab("Requested Req/s")
+```
+
+```{r plot_xverify_ndp}
+ggplot(t_data) +
+  geom_point(stat = 'identity', aes(x = opts_actual_ndp, y = opts_ndp, group = interaction(opts_function,opts_ndp), color = interaction(opts_function,opts_ndp))) +
+  labs(title = "Xverify NDP") +
+  xlab("Real NDP") + ylab("Requested NDP")
 ```

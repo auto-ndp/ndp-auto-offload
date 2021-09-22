@@ -1,7 +1,7 @@
 use anyhow::Result;
 use argh::FromArgs;
 use num_traits::Num;
-use rand_core::RngCore;
+//use rand_core::RngCore;
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
@@ -46,7 +46,7 @@ struct Options {
 
     /// ndp offloading fraction [0.0-1.0]
     #[argh(option, short = 'N', default = "1.0")]
-    offload_frac: f32,
+    offload_frac: f64,
 
     /// monitoring host[s] to connect to, separated by ;
     #[argh(option, short = 'm', default = "String::from(\"\")")]
@@ -168,14 +168,20 @@ async fn async_main(opts: &'static Options) -> Result<()> {
     let mut handles: Vec<tokio::task::JoinHandle<Result<RequestResult>>> =
         Vec::with_capacity(total_requests as usize);
     let reference_time = Instant::now();
-    let mut seq_gen = rand_pcg::Lcg64Xsh32::new(0xcafef00dd15ea5e5, 0xa02bdbf7bb3c0a7);
+    /*let mut seq_gen = rand_pcg::Lcg64Xsh32::new(0xcafef00dd15ea5e5, 0xa02bdbf7bb3c0a7);
     let mut rng_buf = 0u32.to_le_bytes();
-    let ndp_threshold = ((opts.offload_frac as f64) * (u32::MAX as f64)) as u32;
+    let ndp_threshold = ((opts.offload_frac as f64) * (u32::MAX as f64)) as u32;*/
+    let mut ndp_var = 0.0f64;
     let mut ndp_reqs = 0i64;
     for request_id in 0..total_requests {
         interval.tick().await;
-        seq_gen.fill_bytes(&mut rng_buf[..]);
-        let allow_ndp = u32::from_le_bytes(rng_buf) < ndp_threshold;
+        //seq_gen.fill_bytes(&mut rng_buf[..]);
+        //let allow_ndp = u32::from_le_bytes(rng_buf) < ndp_threshold;
+        ndp_var += opts.offload_frac;
+        while ndp_var >= 1.0 {
+            ndp_var -= 1.0;
+        }
+        let allow_ndp = ndp_var >= 0.5 || opts.offload_frac > 0.999;
         let request = if allow_ndp {
             ndp_reqs += 1;
             &request_pool[which_request].1
