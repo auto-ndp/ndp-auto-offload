@@ -9,7 +9,7 @@ printf "" > $OUTFILE
 
 FS_ARGS="wordcount ${DATASET}"
 RPS_LIST="10 20 30 40 50 60 70 80 90 100 120 140 160 180 200 250 300 310 320 330 340 350 360 370 380 390 400 410 420 430 440 450 460 470 480 490 500"
-NDP_LIST="0.0 0.25 0.5 0.75 1.0"
+NDP_LIST="0 1 2 3 4"
 TIME_PER=10
 FAASMSPEED=faasmspeed
 PARALLELISM=2
@@ -26,9 +26,9 @@ for RPS in ${RPS_LIST}
 do
     echo "*** Wordcount NDP=${NDP} RPS=${RPS}"
     # Warm-up burst
-    ${FAASMSPEED} -h ${HOST} -u ndp -N ${NDP} -f ${FS_ARGS} -c -x ${TIMEOUT} -t ${WARMUP_TIME} -r ${RPS} -p ${PARALLELISM} 2>&1 > /dev/null
+    ${FAASMSPEED} -h ${HOST} -u ndp -n ${NDP} -N 4 -f ${FS_ARGS} -c -x ${TIMEOUT} -t ${WARMUP_TIME} -r ${RPS} -p ${PARALLELISM} 2>&1 > /dev/null
     sleep 0.2
-    ${FAASMSPEED} -h ${HOST} -u ndp -N ${NDP} -f ${FS_ARGS} -c -m ${MONITOR_HOSTS} -x ${TIMEOUT} -t ${TIME_PER} -r ${RPS} -p ${PARALLELISM} >> $OUTFILE
+    ${FAASMSPEED} -h ${HOST} -u ndp -n ${NDP} -N 4 -f ${FS_ARGS} -c -m ${MONITOR_HOSTS} -x ${TIMEOUT} -t ${TIME_PER} -r ${RPS} -p ${PARALLELISM} >> $OUTFILE
 done
 sleep 35
 
