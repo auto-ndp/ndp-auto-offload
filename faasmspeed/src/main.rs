@@ -114,7 +114,7 @@ async fn async_main(opts: &'static Options) -> Result<()> {
     );
     eprintln!("[status] Making a test request");
     {
-        let test_request = if opts.offload_frac > 0.5 {
+        let test_request = if opts.offload_frac_num >= opts.offload_frac_den / 2 {
             &request_pool[0].1
         } else {
             &request_pool[0].0
