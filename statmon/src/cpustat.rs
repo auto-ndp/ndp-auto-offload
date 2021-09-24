@@ -81,8 +81,8 @@ impl CpuStat {
 
     pub fn cpu_totals_ms(&self) -> [u64; 10] {
         let mut r = [0u64; 10];
-        for i in 0..self.cpu_totals.len() {
-            r[i] = self.cpu_totals[i] - self.cpu_totals_last[i];
+        for (i, ritem) in r.iter_mut().enumerate().take(self.cpu_totals.len()) {
+            *ritem = self.cpu_totals[i] - self.cpu_totals_last[i];
         }
         r
     }

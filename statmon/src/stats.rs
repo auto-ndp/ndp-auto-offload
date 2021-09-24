@@ -1,7 +1,9 @@
 use anyhow::{Context, Result};
+use itertools::Itertools;
 use std::fmt::Write as _;
 use std::fs::{File, OpenOptions};
 use std::io::{prelude::*, SeekFrom};
+use std::os::unix::io::AsRawFd;
 
 use crate::cpustat::{CpuStat, CpuTotals};
 
@@ -101,6 +103,11 @@ pub enum WhichStat {
     ContextSwitches,
     ProcsRunning,
     ProcsBlocked,
+    FaasmLocalSched,
+    FaasmWaitingQueued,
+    FaasmStarted,
+    FaasmSuspended,
+    FaasmActive,
     NetRxBytes,
     NetRxErrors,
     NetTxBytes,
@@ -174,6 +181,11 @@ const STATS_INIT: [Stat; WhichStat::TotalStatCount as usize] = [
     Stat::int("cswitches"),
     Stat::int("procs_running"),
     Stat::int("procs_blocked"),
+    Stat::int("faasm_local_sched"),
+    Stat::int("faasm_waiting_queued"),
+    Stat::int("faasm_started"),
+    Stat::int("faasm_suspended"),
+    Stat::int("faasm_Active"),
     Stat::int("net_rx_bytes"),
     Stat::int("net_rx_errors"),
     Stat::int("net_tx_bytes"),
@@ -188,6 +200,7 @@ pub struct Stats {
     fp_loadavg: Option<File>,
     fp_meminfo: Option<File>,
     fp_net: Option<File>,
+    fp_faasm: Option<File>,
     cpu: CpuStat,
     stats: [Stat; WhichStat::TotalStatCount as usize],
     net_rx_ref: i64,
@@ -206,6 +219,7 @@ impl Stats {
             fp_loadavg: None,
             fp_meminfo: None,
             fp_net: None,
+            fp_faasm: None,
             cpu: CpuStat::new(),
             stats: STATS_INIT,
             net_rx_ref: 0,
@@ -253,6 +267,7 @@ impl Stats {
         }
         self.upd_loadavg()?;
         self.upd_meminfo()?;
+        self.upd_faasm()?;
         self.upd_net()?;
         self.cpu.update(&mut self.rdbuf)?;
         {
@@ -385,6 +400,51 @@ impl Stats {
                 }
                 _ => {}
             }
+        }
+        Ok(())
+    }
+
+    fn upd_faasm(&mut self) -> Result<()> {
+        if self.fp_faasm.is_none() {
+            self.fp_faasm = Some(OpenOptions::new().read(true).open("/tmp/faasm-monitor")?);
+        }
+        let fp_faasm = self.fp_faasm.as_mut().unwrap();
+        self.rdbuf.clear();
+        unsafe {
+            libc::flock(fp_faasm.as_raw_fd(), libc::LOCK_SH);
+        }
+        struct UnlockGuard {
+            fd: libc::c_int,
+        }
+        impl Drop for UnlockGuard {
+            fn drop(&mut self) {
+                unsafe {
+                    libc::flock(self.fd, libc::LOCK_UN);
+                }
+            }
+        }
+        let file_guard = UnlockGuard {
+            fd: fp_faasm.as_raw_fd(),
+        };
+        fp_faasm.read_to_string(&mut self.rdbuf)?;
+        fp_faasm.seek(SeekFrom::Start(0))?;
+        drop(file_guard);
+        for (field, fvalstr) in self.rdbuf.split(',').tuples() {
+            let fvalint: i64 = fvalstr
+                .parse()
+                .with_context(|| format!("Parsing faasm field {}={}", field, fvalstr))?;
+            self.stats[match field {
+                "local_sched" => WhichStat::FaasmLocalSched,
+                "waiting_queued" => WhichStat::FaasmWaitingQueued,
+                "started" => WhichStat::FaasmStarted,
+                "waiting" => WhichStat::FaasmSuspended,
+                "active" => WhichStat::FaasmActive,
+                _ => {
+                    return Err(anyhow::anyhow!("Unknown faasm field {}", field));
+                }
+            } as usize]
+                .value_now
+                .seti(fvalint);
         }
         Ok(())
     }
