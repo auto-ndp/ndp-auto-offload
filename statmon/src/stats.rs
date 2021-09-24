@@ -429,7 +429,7 @@ impl Stats {
         fp_faasm.read_to_string(&mut self.rdbuf)?;
         fp_faasm.seek(SeekFrom::Start(0))?;
         drop(file_guard);
-        for (field, fvalstr) in self.rdbuf.split(',').tuples() {
+        for (field, fvalstr) in self.rdbuf.split(',').map(str::trim).tuples() {
             let fvalint: i64 = fvalstr
                 .parse()
                 .with_context(|| format!("Parsing faasm field {}={}", field, fvalstr))?;
