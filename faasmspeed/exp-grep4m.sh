@@ -1,6 +1,7 @@
 #!/bin/sh
 
-DATASET=$(seq --format='"wiki4m/frag_%06.0f User"' 0 20274)
+seq --format='wiki4m/frag_%06.0f User' 0 20274 > /tmp/grep_dataset
+DATASET="@/tmp/grep_dataset"
 
 OUTFILE=results-grep4m-$(date -I).log
 

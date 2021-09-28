@@ -65,6 +65,16 @@ fn get_opts() -> Options {
     if opts.input_data.is_empty() {
         opts.input_data.push(String::new());
     }
+    if let Some(fname) = opts.input_data[0].strip_prefix('@').map(str::trim) {
+        opts.input_data = std::fs::read_to_string(fname)
+            .expect("Couldn't read arguments file")
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .map(String::from)
+            .collect();
+        eprintln!("[status] Loaded {} args from file", opts.input_data.len());
+    }
     if !opts.url.starts_with("http://") {
         opts.url.insert_str(0, "http://");
     }
