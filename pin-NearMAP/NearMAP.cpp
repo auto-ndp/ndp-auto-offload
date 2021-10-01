@@ -192,7 +192,7 @@ int main(int argc, char *argv[]) {
   uintptr_t pageSize = KnobPageSize.Value();
   TracePageSizeLog2 = 0;
   while (pageSize > 1) {
-    pageSize <<= 1;
+    pageSize >>= 1;
     TracePageSizeLog2++;
   }
   cerr << "Using page size: " << (1 << TracePageSizeLog2) << endl;
