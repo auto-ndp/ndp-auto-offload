@@ -111,7 +111,7 @@ void PhaseStubReplacement(const char *name) {
   uint64_t prevTime = accessState.phaseTimes.back();
   *out << "phase;" << prevTime << ';' << currTime << ';' << name << ';'
        << InstructionCounter << endl;
-  cerr << "Phase " << name << " from " << prevTime << " to " << currTime
+  cerr << "Starting new phase " << name << ", previous phase: from " << prevTime << " to " << currTime
        << " with insns " << InstructionCounter << endl;
   accessState.phaseTimes.push_back(currTime);
   summarizeLastAccesses(prevTime, currTime);
