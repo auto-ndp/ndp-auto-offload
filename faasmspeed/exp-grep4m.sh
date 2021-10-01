@@ -9,7 +9,7 @@ echo Writing results to $OUTFILE
 printf "" > $OUTFILE
 
 FS_ARGS="grep ${DATASET}"
-RPS_LIST="$(seq 10 10 90) $(seq 100 25 1000)"
+RPS_LIST="$(seq 10 10 90) $(seq 100 25 500)"
 NDP_LIST="0 1 2 3 4"
 TIME_PER=10
 FAASMSPEED=faasmspeed
