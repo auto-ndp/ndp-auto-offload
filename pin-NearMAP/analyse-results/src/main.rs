@@ -118,10 +118,10 @@ fn analyse_file(path: &Path, out: &mut String) -> io::Result<()> {
             path.display(),
             phase.name,
             phase.page_size,
-            read_pages,
-            written_pages,
-            dead_writes,
-            new_reads,
+            read_pages * phase.page_size,
+            written_pages * phase.page_size,
+            dead_writes * phase.page_size,
+            new_reads * phase.page_size,
             phase.instructions,
         )
         .unwrap();
@@ -132,7 +132,7 @@ fn analyse_file(path: &Path, out: &mut String) -> io::Result<()> {
 /// Outputs CSV
 fn analyse_folder(folder: &Path, out: &mut String) -> io::Result<()> {
     writeln!(out, "{}", folder.display()).unwrap();
-    out.push_str("Trace,Phase,Page size,Read pages,Written pages,Dead written pages,New reads,Instructions\n");
+    out.push_str("Trace,Phase,Page size,Read bytes,Written bytes,Dead written bytes,New read bytes,Instructions\n");
     for file in fs::read_dir(folder)? {
         let file = file?;
         let path = file.path();
