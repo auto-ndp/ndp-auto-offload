@@ -75,8 +75,7 @@ void summarizeLastAccesses(uint64_t startTime, uint64_t endTime) {
     *out << ";\n";
   }
   *out << "summary-ro-rw-wo-tot-insn;" << uniqRO << ';' << uniqRW << ';'
-       << uniqWO << ';' << uniqRO + uniqRW + uniqWO << ';' << InstructionCounter
-       << "\n";
+       << uniqWO << ';' << uniqRO + uniqRW + uniqWO << "\n";
   out->flush();
   cerr << "Rtn RO:" << uniqRO << " RW:" << uniqRW << " WO:" << uniqWO
        << " TOT:" << uniqRO + uniqRW + uniqWO << " Insn:" << InstructionCounter
@@ -110,11 +109,13 @@ void PhaseStubReplacement(const char *name) {
   accessState.currTime++;
   uint64_t currTime = accessState.currTime;
   uint64_t prevTime = accessState.phaseTimes.back();
-  *out << "phase;" << prevTime << ';' << currTime << ';' << name << endl;
+  *out << "phase;" << prevTime << ';' << currTime << ';' << name << ';'
+       << InstructionCounter << endl;
   cerr << "Phase " << name << " from " << prevTime << " to " << currTime
-       << endl;
+       << " with insns " << InstructionCounter << endl;
   accessState.phaseTimes.push_back(currTime);
   summarizeLastAccesses(prevTime, currTime);
+  InstructionCounter = 0;
 }
 }
 

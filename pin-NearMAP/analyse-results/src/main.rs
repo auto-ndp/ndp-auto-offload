@@ -36,14 +36,16 @@ impl AccessType {
 pub struct TracePhase {
     pub name: String,
     pub start_time: u64,
+    pub instructions: u64,
     pub accesses: HashMap<PageNumber, AccessType>,
 }
 
 impl TracePhase {
-    fn new(name: String, start_time: u64) -> Self {
+    fn new(name: String, start_time: u64, instructions: u64) -> Self {
         Self {
             name,
             start_time,
+            instructions,
             accesses: HashMap::with_capacity(1024 * 1024),
         }
     }
@@ -76,9 +78,11 @@ fn analyse_file(path: &Path, out: &mut String) -> io::Result<()> {
             let prev_start_time: u64 = spl.next().unwrap().parse().unwrap();
             let _prev_end_time: u64 = spl.next().unwrap().parse().unwrap();
             let name: String = spl.next().unwrap().to_owned();
+            let instructions: u64 = spl.next().unwrap_or("0").parse().unwrap();
             phases.push(TracePhase::new(
                 std::mem::replace(&mut next_phase, name),
                 prev_start_time,
+                instructions,
             ));
         }
     }
