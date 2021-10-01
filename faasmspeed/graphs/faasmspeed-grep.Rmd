@@ -18,7 +18,7 @@ knitr::opts_chunk$set(echo = FALSE)
 ```
 
 ```{r read_csv, include=FALSE, cache=TRUE, cache.extra = file.info("wtable.csv")}
-raw_csv <- import('wtable.csv')
+raw_csv <- import('greptable.csv')
 
 t_data <- raw_csv %>%
   mutate (
