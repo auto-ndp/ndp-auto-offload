@@ -22,6 +22,7 @@ struct AccessState {
 } accessState;
 
 const std::string PhaseStubName = "pinnearmap_phase";
+volatile uint64_t InstructionCounter{0};
 
 /* ===================================================================== */
 // Command line switches
@@ -73,11 +74,13 @@ void summarizeLastAccesses(uint64_t startTime, uint64_t endTime) {
     }
     *out << ";\n";
   }
-  *out << "summary-ro-rw-wo-tot;" << uniqRO << ';' << uniqRW << ';' << uniqWO
-       << ';' << uniqRO + uniqRW + uniqWO << "\n";
+  *out << "summary-ro-rw-wo-tot-insn;" << uniqRO << ';' << uniqRW << ';'
+       << uniqWO << ';' << uniqRO + uniqRW + uniqWO << ';' << InstructionCounter
+       << "\n";
   out->flush();
   cerr << "Rtn RO:" << uniqRO << " RW:" << uniqRW << " WO:" << uniqWO
-       << " TOT:" << uniqRO + uniqRW + uniqWO << "\n";
+       << " TOT:" << uniqRO + uniqRW + uniqWO << "Insn:" << InstructionCounter
+       << "\n";
 }
 
 VOID OnRead(ADDRINT addr, UINT32 accessSz) {
@@ -99,6 +102,8 @@ VOID OnWrite(ADDRINT addr, UINT32 accessSz) {
     map[page].lastWrite = time;
   }
 }
+
+VOID CountBbl(UINT32 numInstInBbl) { InstructionCounter += numInstInBbl; }
 
 extern "C" {
 void PhaseStubReplacement(const char *name) {
@@ -140,6 +145,16 @@ VOID Instruction(INS ins, VOID *v) {
   }
 }
 
+VOID Trace(TRACE trace, VOID *v) {
+  // Visit every basic block in the trace
+  for (BBL bbl = TRACE_BblHead(trace); BBL_Valid(bbl); bbl = BBL_Next(bbl)) {
+    // Insert a call to CountBbl() before every basic bloc, passing the number
+    // of instructions
+    BBL_InsertCall(bbl, IPOINT_BEFORE, (AFUNPTR)CountBbl, IARG_UINT32,
+                   BBL_NumIns(bbl), IARG_END);
+  }
+}
+
 /*!
  * Print out analysis results.
  * This function is called when the application exits.
@@ -173,6 +188,8 @@ int main(int argc, char *argv[]) {
   if (!fileName.empty()) {
     out = new std::ofstream(fileName.c_str());
   }
+
+  TRACE_AddInstrumentFunction(Trace, 0);
 
   RTN_AddInstrumentFunction(Routine, NULL);
 
