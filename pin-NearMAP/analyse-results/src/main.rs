@@ -42,9 +42,10 @@ pub struct TracePhase {
 }
 
 impl TracePhase {
-    fn new(name: String, start_time: u64, instructions: u64) -> Self {
+    fn new(name: String, page_size: u64, start_time: u64, instructions: u64) -> Self {
         Self {
             name,
+            page_size,
             start_time,
             instructions,
             accesses: HashMap::with_capacity(1024 * 1024),
@@ -113,14 +114,15 @@ fn analyse_file(path: &Path, out: &mut String) -> io::Result<()> {
         }
         writeln!(
             out,
-            "{},{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{},{}",
             path.display(),
             phase.name,
+            phase.page_size,
             read_pages,
             written_pages,
             dead_writes,
             new_reads,
-            instructions,
+            phase.instructions,
         )
         .unwrap();
     }
