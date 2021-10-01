@@ -30,7 +30,7 @@ t_data <- raw_csv %>%
     error_rate = errors_count / (errors_count + results_count),
     # Work around bad outlier removal, use q3+1.5*IQR as an estimate of max non-outlier value
     latency_us_q99pct = pmin(latency_us_q99pct, latency_us_q3 + 1.5*(latency_us_q3 - latency_us_q1))
-  )
+  ) %>% filter (opts_req_rps <= 625)
 function_name <- toString(first(t_data$opts_function))
 ```
 

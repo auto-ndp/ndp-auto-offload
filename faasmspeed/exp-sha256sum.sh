@@ -1,6 +1,6 @@
 #!/bin/sh
 
-seq --format='wiki4m/frag_%06.0f User' 0 20274 > /tmp/sha_dataset
+seq --format='wiki4m/frag_%06.0f' 0 20274 > /tmp/sha_dataset
 DATASET="@/tmp/sha_dataset"
 
 OUTFILE=results-sha4m-$(date -I).log
