@@ -79,7 +79,7 @@ void summarizeLastAccesses(uint64_t startTime, uint64_t endTime) {
        << "\n";
   out->flush();
   cerr << "Rtn RO:" << uniqRO << " RW:" << uniqRW << " WO:" << uniqWO
-       << " TOT:" << uniqRO + uniqRW + uniqWO << "Insn:" << InstructionCounter
+       << " TOT:" << uniqRO + uniqRW + uniqWO << " Insn:" << InstructionCounter
        << "\n";
 }
 
