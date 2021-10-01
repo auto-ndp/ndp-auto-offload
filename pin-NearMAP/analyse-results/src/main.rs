@@ -38,16 +38,24 @@ pub struct TracePhase {
     pub page_size: u64,
     pub start_time: u64,
     pub instructions: u64,
+    pub io_bytes: u64,
     pub accesses: HashMap<PageNumber, AccessType>,
 }
 
 impl TracePhase {
-    fn new(name: String, page_size: u64, start_time: u64, instructions: u64) -> Self {
+    fn new(
+        name: String,
+        page_size: u64,
+        start_time: u64,
+        instructions: u64,
+        io_bytes: u64,
+    ) -> Self {
         Self {
             name,
             page_size,
             start_time,
             instructions,
+            io_bytes,
             accesses: HashMap::with_capacity(1024 * 1024),
         }
     }
@@ -82,11 +90,13 @@ fn analyse_file(path: &Path, out: &mut String) -> io::Result<()> {
             let _prev_end_time: u64 = spl.next().unwrap().parse().unwrap();
             let name: String = spl.next().unwrap().to_owned();
             let instructions: u64 = spl.next().unwrap_or("0").parse().unwrap();
+            let io_bytes: u64 = spl.next().unwrap_or("0").parse().unwrap();
             phases.push(TracePhase::new(
                 std::mem::replace(&mut next_phase, name),
                 page_size,
                 prev_start_time,
                 instructions,
+                io_bytes,
             ));
         }
     }
@@ -114,7 +124,7 @@ fn analyse_file(path: &Path, out: &mut String) -> io::Result<()> {
         }
         writeln!(
             out,
-            "{},{},{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{},{},{}",
             path.display(),
             phase.name,
             phase.page_size,
@@ -122,6 +132,7 @@ fn analyse_file(path: &Path, out: &mut String) -> io::Result<()> {
             written_pages * phase.page_size,
             dead_writes * phase.page_size,
             new_reads * phase.page_size,
+            phase.io_bytes,
             phase.instructions,
         )
         .unwrap();
@@ -132,7 +143,7 @@ fn analyse_file(path: &Path, out: &mut String) -> io::Result<()> {
 /// Outputs CSV
 fn analyse_folder(folder: &Path, out: &mut String) -> io::Result<()> {
     writeln!(out, "{}", folder.display()).unwrap();
-    out.push_str("Trace,Phase,Page size,Read bytes,Written bytes,Dead written bytes,New read bytes,Instructions\n");
+    out.push_str("Trace,Phase,Page size,Read bytes,Written bytes,Dead written bytes,New read bytes,IO Bytes,Instructions\n");
     for file in fs::read_dir(folder)? {
         let file = file?;
         let path = file.path();

@@ -3,7 +3,10 @@
 #include <Python.h>
 #endif
 
+#include <stdint.h>
+
 void __attribute__((noinline)) pinnearmap_phase(const char *name) { asm(""); }
+void __attribute__((noinline)) pinnearmap_io_bytes(uint64_t bytes) { asm(""); }
 
 #ifndef NO_PYTHON
 static PyObject *pypinnearmap_phase(PyObject *self, PyObject *args) {

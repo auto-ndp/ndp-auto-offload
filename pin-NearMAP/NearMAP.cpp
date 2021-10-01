@@ -16,11 +16,13 @@ struct RWTime {
 
 struct AccessState {
   uint64_t currTime = 0;
+  uint64_t ioBytes = 0;
   std::unordered_map<uintptr_t, RWTime> pageLastAccesses;
   std::vector<uintptr_t> phaseTimes;
 } accessState;
 
 const std::string PhaseStubName = "pinnearmap_phase";
+const std::string IoStubName = "pinnearmap_io_bytes";
 volatile uint64_t InstructionCounter{0};
 
 /* ===================================================================== */
@@ -113,12 +115,20 @@ void PhaseStubReplacement(const char *name) {
   uint64_t currTime = accessState.currTime;
   uint64_t prevTime = accessState.phaseTimes.back();
   *out << "phase;" << (1 << TracePageSizeLog2) << ';' << prevTime << ';'
-       << currTime << ';' << name << ';' << InstructionCounter << endl;
+       << currTime << ';' << name << ';' << InstructionCounter << ';'
+       << accessState.ioBytes << endl;
   cerr << "Starting new phase " << name << ", previous phase: from " << prevTime
-       << " to " << currTime << " with insns " << InstructionCounter << endl;
+       << " to " << currTime << " with insns " << InstructionCounter
+       << " IO bytes: " << accessState.ioBytes << endl;
   accessState.phaseTimes.push_back(currTime);
+  accessState.ioBytes = 0;
   summarizeLastAccesses(prevTime, currTime);
   InstructionCounter = 0;
+}
+
+void IoStubReplacement(uint64_t ioBytes) {
+  accessState.currTime++;
+  accessState.ioBytes += ioBytes;
 }
 }
 
@@ -129,11 +139,14 @@ void PhaseStubReplacement(const char *name) {
 VOID Routine(RTN rtn, VOID *v) {
   RTN_Open(rtn);
   do {
-    if (RTN_Name(rtn) != PhaseStubName) {
-      break;
+    if (RTN_Name(rtn) == PhaseStubName) {
+      RTN_Replace(rtn, (AFUNPTR)PhaseStubReplacement);
+      *out << "Phase stub found and instrumented\n";
     }
-    RTN_Replace(rtn, (AFUNPTR)PhaseStubReplacement);
-    *out << "Phase stub found and instrumented\n";
+    if (RTN_Name(rtn) == IoStubName) {
+      RTN_Replace(rtn, (AFUNPTR)IoStubReplacement);
+      *out << "IO stub found and instrumented\n";
+    }
   } while (0);
   RTN_Close(rtn);
 }
