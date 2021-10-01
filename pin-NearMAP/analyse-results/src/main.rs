@@ -35,6 +35,7 @@ impl AccessType {
 #[derive(Clone, Debug)]
 pub struct TracePhase {
     pub name: String,
+    pub page_size: u64,
     pub start_time: u64,
     pub instructions: u64,
     pub accesses: HashMap<PageNumber, AccessType>,
@@ -73,14 +74,16 @@ fn analyse_file(path: &Path, out: &mut String) -> io::Result<()> {
             phase.accesses.insert(pageidx, accessty);
         } else if line.starts_with("phase;") {
             // phase;0;56962;main-start
-            let mut spl = line.splitn(4, ';');
+            let mut spl = line.split(';');
             let _ = spl.next().unwrap();
+            let page_size: u64 = spl.next().unwrap().parse().unwrap();
             let prev_start_time: u64 = spl.next().unwrap().parse().unwrap();
             let _prev_end_time: u64 = spl.next().unwrap().parse().unwrap();
             let name: String = spl.next().unwrap().to_owned();
             let instructions: u64 = spl.next().unwrap_or("0").parse().unwrap();
             phases.push(TracePhase::new(
                 std::mem::replace(&mut next_phase, name),
+                page_size,
                 prev_start_time,
                 instructions,
             ));
@@ -110,13 +113,14 @@ fn analyse_file(path: &Path, out: &mut String) -> io::Result<()> {
         }
         writeln!(
             out,
-            "{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{}",
             path.display(),
             phase.name,
             read_pages,
             written_pages,
             dead_writes,
             new_reads,
+            instructions,
         )
         .unwrap();
     }
@@ -126,7 +130,7 @@ fn analyse_file(path: &Path, out: &mut String) -> io::Result<()> {
 /// Outputs CSV
 fn analyse_folder(folder: &Path, out: &mut String) -> io::Result<()> {
     writeln!(out, "{}", folder.display()).unwrap();
-    out.push_str("Trace,Phase,Read pages,Written pages,Dead written pages,New reads\n");
+    out.push_str("Trace,Phase,Page size,Read pages,Written pages,Dead written pages,New reads,Instructions\n");
     for file in fs::read_dir(folder)? {
         let file = file?;
         let path = file.path();

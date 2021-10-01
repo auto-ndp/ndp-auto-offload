@@ -15,7 +15,7 @@ struct RWTime {
 };
 
 struct AccessState {
-  constexpr static uintptr_t TracePageSize = 64;
+  static uintptr_t TracePageSizeLog2;
   uint64_t currTime = 0;
   std::unordered_map<uintptr_t, RWTime> pageLastAccesses;
   std::vector<uintptr_t> phaseTimes;
@@ -30,6 +30,9 @@ volatile uint64_t InstructionCounter{0};
 KNOB<std::string> KnobOutputFile(KNOB_MODE_WRITEONCE, "pintool", "o",
                                  "pin_nearmap.log",
                                  "specify file name for NearMAP output");
+
+KNOB<uint32_t> KnobPageSize(KNOB_MODE_WRITEONCE, "pintool", "p", "4096",
+                            "page size for tracking");
 
 uint64_t lastReadPage{0}, lastWritePage{0};
 
@@ -83,8 +86,9 @@ void summarizeLastAccesses(uint64_t startTime, uint64_t endTime) {
 }
 
 VOID OnRead(ADDRINT addr, UINT32 accessSz) {
-  const uintptr_t apage = addr / AccessState::TracePageSize;
-  const uintptr_t epage = (addr + accessSz - 1) / AccessState::TracePageSize;
+  const uintptr_t apage = addr >> AccessState::TracePageSizeLog2;
+  const uintptr_t epage =
+      (addr + accessSz - 1) >> AccessState::TracePageSizeLog2;
   uint64_t time = accessState.currTime++;
   auto &map = accessState.pageLastAccesses;
   for (uintptr_t page = apage; page <= epage; page++) {
@@ -93,8 +97,9 @@ VOID OnRead(ADDRINT addr, UINT32 accessSz) {
 }
 
 VOID OnWrite(ADDRINT addr, UINT32 accessSz) {
-  const uintptr_t apage = addr / AccessState::TracePageSize;
-  const uintptr_t epage = (addr + accessSz - 1) / AccessState::TracePageSize;
+  const uintptr_t apage = addr >> AccessState::TracePageSizeLog2;
+  const uintptr_t epage =
+      (addr + accessSz - 1) >> AccessState::TracePageSizeLog2;
   uint64_t time = accessState.currTime++;
   auto &map = accessState.pageLastAccesses;
   for (uintptr_t page = apage; page <= epage; page++) {
@@ -109,10 +114,10 @@ void PhaseStubReplacement(const char *name) {
   accessState.currTime++;
   uint64_t currTime = accessState.currTime;
   uint64_t prevTime = accessState.phaseTimes.back();
-  *out << "phase;" << prevTime << ';' << currTime << ';' << name << ';'
-       << InstructionCounter << endl;
-  cerr << "Starting new phase " << name << ", previous phase: from " << prevTime << " to " << currTime
-       << " with insns " << InstructionCounter << endl;
+  *out << "phase;" << (1 << AccessState::TracePageSizeLog2) << ';' << prevTime
+       << ';' << currTime << ';' << name << ';' << InstructionCounter << endl;
+  cerr << "Starting new phase " << name << ", previous phase: from " << prevTime
+       << " to " << currTime << " with insns " << InstructionCounter << endl;
   accessState.phaseTimes.push_back(currTime);
   summarizeLastAccesses(prevTime, currTime);
   InstructionCounter = 0;
@@ -185,6 +190,14 @@ int main(int argc, char *argv[]) {
   accessState.phaseTimes.push_back(0);
 
   std::string fileName = KnobOutputFile.Value();
+
+  uintptr_t pageSize = KnobPageSize.Value();
+  AccessState::TracePageSizeLog2 = 0;
+  while (pageSize > 1) {
+    pageSize <<= 1;
+    AccessState::TracePageSizeLog2++;
+  }
+  cerr << "Using page size: " << (1 << AccessState::TracePageSizeLog2) << endl;
 
   if (!fileName.empty()) {
     out = new std::ofstream(fileName.c_str());
