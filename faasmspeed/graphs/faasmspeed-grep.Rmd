@@ -117,7 +117,7 @@ gplt
 ```
 
 ```{r table_network}
-net_table <- t_data %>% filter(opts_req_rps <= 150) %>%
+net_table <- t_data %>% filter(opts_req_rps <= 90) %>% filter(opts_req_rps >= 30) %>%
   group_by(opts_ndp) %>%
   summarise(mean = mean((monitor_computenet_tx_bytes_sum + monitor_storagenet_tx_bytes_sum) / results_count))
 net_table <- column_to_rownames(net_table, var="opts_ndp")
