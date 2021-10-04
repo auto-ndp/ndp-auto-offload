@@ -7,7 +7,7 @@ OUTFILE=results-thumb1-$(date -I).log
 echo Writing results to $OUTFILE
 printf "" > $OUTFILE
 
-FS_ARGS="thumb_shrink ${DATASET}"
+FS_ARGS="thumbnailer_shrink ${DATASET}"
 RPS_LIST="$(seq 10 10 90) $(seq 100 25 600)"
 NDP_LIST="0 1 2 3 4"
 TIME_PER=10
