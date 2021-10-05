@@ -2,7 +2,7 @@
 
 DATASET="@$(pwd)/logoset.txt"
 
-OUTFILE=results-thumb1-$(date -I).log
+OUTFILE=results-thumb2-$(date -I).log
 
 echo Writing results to $OUTFILE
 printf "" > $OUTFILE
