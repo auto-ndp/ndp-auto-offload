@@ -234,8 +234,8 @@ ggplot(t_data) +
 ```
 
 ```{r plot_mem_active_s}
-cmembase <- min(t_data$monitor_computemem_active_min)
-smembase <- min(t_data$monitor_storagemem_active_min)
+cmembase <- as.double(min(t_data$monitor_computemem_active_min)) - 1.0
+smembase <- as.double(min(t_data$monitor_storagemem_active_min)) - 1.0
 ggplot(t_data) +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_storagemem_active_avg - smembase, group = opts_ndp, color = interaction(opts_ndp), linetype = "Storage")) +
   scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
