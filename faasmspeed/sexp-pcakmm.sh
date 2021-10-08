@@ -1,19 +1,20 @@
 #!/bin/sh
 
-DATASET="@$(pwd)/logoset.txt"
+seq --format='mnists/set%.0f' 10000 > /tmp/pcadataset
+DATASET="@/tmp/pcadataset"
 
-OUTFILE=results-thumb1-$(date -I).log
+OUTFILE=sresults-pcakmm-$(date -I).log
 
 echo Writing results to $OUTFILE
 printf "" > $OUTFILE
 
-FS_ARGS="thumbnailer_decode ${DATASET}"
-RPS_LIST="$(seq 10 10 90) $(seq 100 25 500) $(seq 600 100 2000)"
-NDP_LIST="0 1 2 3 4"
-TIME_PER=10
+FS_ARGS="pcakmm ${DATASET}"
+RPS_LIST="$(seq 0.4 0.2 10) $(seq 11 1 30)"
+NDP_LIST="5"
+TIME_PER=20
 FAASMSPEED=faasmspeed
-PARALLELISM=2
-WARMUP_TIME=2
+PARALLELISM=4
+WARMUP_TIME=4
 TIMEOUT=45000
 HOST=http://192.168.3.30:8080
 MONITOR_HOSTS='luna:8125;kone:8125'

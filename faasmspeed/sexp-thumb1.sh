@@ -2,14 +2,14 @@
 
 DATASET="@$(pwd)/logoset.txt"
 
-OUTFILE=results-thumb1-$(date -I).log
+OUTFILE=sresults-thumb1-$(date -I).log
 
 echo Writing results to $OUTFILE
 printf "" > $OUTFILE
 
 FS_ARGS="thumbnailer_decode ${DATASET}"
 RPS_LIST="$(seq 10 10 90) $(seq 100 25 500) $(seq 600 100 2000)"
-NDP_LIST="0 1 2 3 4"
+NDP_LIST="5"
 TIME_PER=10
 FAASMSPEED=faasmspeed
 PARALLELISM=2
