@@ -18,7 +18,7 @@ knitr::opts_chunk$set(echo = FALSE)
 ```
 
 ```{r read_csv, include=FALSE, cache=TRUE, cache.extra = file.info("wtable.csv")}
-raw_csv <- import('subtable.csv')
+raw_csv <- import('pcatable.csv')
 
 t_data <- raw_csv %>%
   mutate (
@@ -31,7 +31,7 @@ t_data <- raw_csv %>%
     # Work around bad outlier removal, use q3+1.5*IQR as an estimate of max non-outlier value
     latency_us_q99pct = pmin(latency_us_q99pct, latency_us_q3 + 1.5*(latency_us_q3 - latency_us_q1)),
     rps_offset = abs(avg_rps_avg_rps - opts_req_rps) / opts_req_rps
-   )
+  )
 function_name <- toString(first(t_data$opts_function))
 
 usms <- 1.0/1000.0
@@ -62,7 +62,7 @@ gplt <- ggplot(t_data %>% filter(rps_offset < 0.05),
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
   geom_line(aes(y = latency_us_med*uss)) +
   geom_point(aes(y = latency_us_med*uss, shape = opts_ndp)) +
-  scale_x_log10(breaks = log_breaks(n=10), label = scales::label_comma(accuracy = 10)) +
+  scale_x_log10(breaks = log_breaks(n=10), label = scales::label_comma(accuracy = 0.1)) +
   scale_y_log10(breaks = log_breaks(n=10), label = scales::label_comma(accuracy = 0.01), expand = c(0.01,0)) +
   labs(title = "Latency for a given request per second rate", color = "% NDP", shape = "% NDP") +
   xlab("Throughput [requests/second]") + ylab("Median latency [s]")
@@ -74,7 +74,7 @@ gplt
 ```
 
 ```{r latency_rps_unloaded_boxplot}
-gplt <- ggplot(t_data %>% filter(opts_req_rps == 20),
+gplt <- ggplot(t_data %>% filter(opts_req_rps == 1),
     aes(y = opts_ndp, color = opts_ndp)) +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
   geom_boxplot(stat="identity", aes(
@@ -88,7 +88,7 @@ pdf(paste0(paper_plot_path, "latency_rps_unloaded_boxplot.pdf"), width=paper_plo
 plot(gplt)
 dev.off()
 
-lat_table <- t_data %>% filter(opts_req_rps == 20) %>%
+lat_table <- t_data %>% filter(opts_req_rps == 1) %>%
   select(opts_ndp,
     latency_us_q1pct, latency_us_q99pct,
     latency_us_q1, latency_us_q3,
@@ -101,7 +101,7 @@ gplt
 ```
 
 ```{r boxplot_v}
-gplt <- ggplot(t_data %>% filter(opts_req_rps == 20),
+gplt <- ggplot(t_data %>% filter(opts_req_rps == 1),
     aes(x = opts_ndp, color = opts_ndp)) +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
@@ -134,7 +134,7 @@ gplt
 ```
 
 ```{r table_network}
-net_table <- t_data %>% filter(opts_req_rps <= 200) %>% filter(opts_req_rps >= 30) %>%
+net_table <- t_data %>% filter(opts_req_rps <= 10) %>% filter(opts_req_rps >= 1) %>%
   group_by(opts_ndp) %>%
   summarise(mean = mean((monitor_computenet_tx_bytes_sum + monitor_storagenet_tx_bytes_sum) / results_count))
 net_table <- column_to_rownames(net_table, var="opts_ndp")
@@ -149,7 +149,7 @@ ggplot(t_data) +
 ```
 
 ```{r cpums_load}
-gplt <- ggplot(t_data,
+gplt <- ggplot(t_data %>% filter(rps_offset < 0.05),
     aes(x = opts_req_rps, group = opts_ndp, color = opts_ndp)) +
   coord_cartesian(ylim = c(0, 100)) +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
@@ -181,6 +181,7 @@ ggplot(t_data) +
 
 ```{r plot_faasm_load}
 ggplot(t_data) +
+  paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_computefaasm_started_avg, group = opts_ndp, color = interaction(opts_ndp), linetype = "Compute")) +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_storagefaasm_started_avg, group = opts_ndp, color = interaction(opts_ndp), linetype = "Storage")) +
   scale_x_continuous(trans = 'identity', breaks = breaks_pretty(n=20), label = scales::label_comma(accuracy = 1)) +
@@ -191,6 +192,7 @@ ggplot(t_data) +
 
 ```{r plot_faasm_load2}
 ggplot(t_data) +
+  paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_computefaasm_waiting_queued_avg, group = opts_ndp, color = interaction(opts_ndp), linetype = "Compute")) +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_storagefaasm_waiting_queued_avg, group = opts_ndp, color = interaction(opts_ndp), linetype = "Storage")) +
   scale_x_continuous(trans = 'identity', breaks = breaks_pretty(n=20), label = scales::label_comma(accuracy = 1)) +
@@ -201,6 +203,7 @@ ggplot(t_data) +
 
 ```{r plot_cpu_softirq}
 ggplot(t_data) +
+  paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_computecpums_softirq_sum / total_requests, group = opts_ndp, color = interaction(opts_ndp), linetype = "Compute")) +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_storagecpums_softirq_sum / total_requests, group = opts_ndp, color = interaction(opts_ndp), linetype = "Storage")) +
   scale_x_continuous(trans = 'identity', breaks = breaks_pretty(n=20), label = scales::label_comma(accuracy = 1)) +
@@ -210,7 +213,7 @@ ggplot(t_data) +
 ```
 
 ```{r plot_cpu_cswitches}
-ggplot(t_data %>% filter(opts_req_rps>50)) +
+ggplot(t_data %>% filter(opts_req_rps>1)) +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_computecswitches_sum / (opts_req_time), group = opts_ndp, color = interaction(opts_ndp), linetype = "Compute")) +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_storagecswitches_sum / (opts_req_time), group = opts_ndp, color = interaction(opts_ndp), linetype = "Storage")) +
   scale_x_continuous(trans = 'identity', breaks = breaks_pretty(n=20), label = scales::label_comma(accuracy = 1)) +
@@ -220,7 +223,7 @@ ggplot(t_data %>% filter(opts_req_rps>50)) +
 ```
 
 ```{r plot_cpu_cswitches_req}
-ggplot(t_data %>% filter(opts_req_rps>50)) +
+ggplot(t_data %>% filter(opts_req_rps>1)) +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_computecswitches_sum / (total_requests), group = opts_ndp, color = interaction(opts_ndp), linetype = "Compute")) +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_storagecswitches_sum / (total_requests), group = opts_ndp, color = interaction(opts_ndp), linetype = "Storage")) +
   scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
@@ -230,7 +233,8 @@ ggplot(t_data %>% filter(opts_req_rps>50)) +
 ```
 
 ```{r plot_load_req}
-ggplot(t_data %>% filter(opts_req_rps>30)) +
+ggplot(t_data %>% filter(opts_req_rps>1)) +
+  paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_computeload_avg1_avg, group = opts_ndp, color = interaction(opts_ndp), linetype = "Compute")) +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_storageload_avg1_avg, group = opts_ndp, color = interaction(opts_ndp), linetype = "Storage")) +
   scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
@@ -240,7 +244,8 @@ ggplot(t_data %>% filter(opts_req_rps>30)) +
 ```
 
 ```{r plot_cpu_ms}
-ggplot(t_data %>% filter(opts_req_rps>30)) +
+ggplot(t_data %>% filter(opts_req_rps>1)) +
+  paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = (monitor_computecpums_user_sum + monitor_computecpums_system_sum + monitor_computecpums_nice_sum) / (results_count), group = opts_ndp, color = interaction(opts_ndp), linetype = "Compute")) +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = (monitor_storagecpums_user_sum + monitor_storagecpums_system_sum + monitor_storagecpums_nice_sum) / (results_count), group = opts_ndp, color = interaction(opts_ndp), linetype = "Storage")) +
   scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
@@ -271,8 +276,8 @@ ggplot(t_data) +
 ```
 
 ```{r plot_mem_active_s}
-cmembase <- min(t_data$monitor_computemem_active_min)
-smembase <- min(t_data$monitor_storagemem_active_min)
+cmembase <- as.double(min(t_data$monitor_computemem_active_min)) - 1.0
+smembase <- as.double(min(t_data$monitor_storagemem_active_min)) - 1.0
 ggplot(t_data) +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_storagemem_active_avg - smembase, group = opts_ndp, color = interaction(opts_ndp), linetype = "Storage")) +
   scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +

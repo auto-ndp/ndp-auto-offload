@@ -29,12 +29,11 @@ t_data <- raw_csv %>%
     total_requests = (errors_count + results_count),
     error_rate = errors_count / (errors_count + results_count),
     # Work around bad outlier removal, use q3+1.5*IQR as an estimate of max non-outlier value
-    latency_us_q99pct = pmin(latency_us_q99pct, latency_us_q3 + 1.5*(latency_us_q3 - latency_us_q1))
-  )
+    latency_us_q99pct = pmin(latency_us_q99pct, latency_us_q3 + 1.5*(latency_us_q3 - latency_us_q1)),
+    rps_offset = abs(avg_rps_avg_rps - opts_req_rps) / opts_req_rps
+   )
 function_name <- toString(first(t_data$opts_function))
-```
 
-```{r formatting}
 usms <- 1.0/1000.0
 uss <- usms/1000.0
 
@@ -58,7 +57,7 @@ paper_plot_path <- paste0('plots/', function_name, '_')
 
 ```{r latency_rps_median}
 # ymin = latency_us_q1*plot_scale, , ymax = latency_us_q3*plot_scale
-gplt <- ggplot(t_data,
+gplt <- ggplot(t_data %>% filter(rps_offset < 0.05),
     aes(x = opts_req_rps, group = opts_ndp, color = opts_ndp)) +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
   geom_line(aes(y = latency_us_med*uss)) +
@@ -76,16 +75,16 @@ gplt
 
 ```{r latency_rps_unloaded_boxplot}
 gplt <- ggplot(t_data %>% filter(opts_req_rps == 20),
-    aes(x = opts_ndp, color = opts_ndp)) +
+    aes(y = opts_ndp, color = opts_ndp)) +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
   geom_boxplot(stat="identity", aes(
-    ymin = latency_us_q1pct*usms, ymax = usms*latency_us_q99pct,
-    lower = latency_us_q1*usms, upper = latency_us_q3*usms,
-    middle = latency_us_med*usms)) +
+    xmin = latency_us_q1pct*usms, xmax = usms*latency_us_q99pct,
+    xlower = latency_us_q1*usms, xupper = latency_us_q3*usms,
+    xmiddle = latency_us_med*usms)) +
   guides(color = "none") +
-  xlab("% Offloaded") + ylab("Latency [ms]")
+  ylab("% Offloaded") + xlab("Latency [ms]")
 
-pdf(paste0(paper_plot_path, "latency_rps_unloaded_boxplot.pdf"), width=paper_plot_w, height=paper_plot_h, useDingbats = FALSE, family = paper_font, pointsize = paper_pointsize)
+pdf(paste0(paper_plot_path, "latency_rps_unloaded_boxplot.pdf"), width=paper_plot_w, height=paper_plot_h*0.4, useDingbats = FALSE, family = paper_font, pointsize = paper_pointsize)
 plot(gplt)
 dev.off()
 
@@ -101,10 +100,28 @@ print(file=paste0(paper_plot_path, "latency_rps_unloaded_table.tex"), xtable(lat
 gplt
 ```
 
+```{r boxplot_v}
+gplt <- ggplot(t_data %>% filter(opts_req_rps == 20),
+    aes(x = opts_ndp, color = opts_ndp)) +
+  paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  geom_boxplot(stat="identity", aes(
+    ymin = latency_us_q1pct*usms, ymax = usms*latency_us_q99pct,
+    lower = latency_us_q1*usms, upper = latency_us_q3*usms,
+    middle = latency_us_med*usms)) +
+  guides(color = "none") +
+  xlab("% Offloaded") + ylab("Latency [ms]")
+
+pdf(paste0(paper_plot_path, "latency_rps_unloaded_boxplot_v.pdf"), width=paper_plot_w*0.4, height=paper_plot_h, useDingbats = FALSE, family = paper_font, pointsize = paper_pointsize)
+plot(gplt)
+dev.off()
+gplt
+```
+
 ```{r plot_error_rate}
 gplt <- ggplot(t_data, aes(x = opts_req_rps, y = error_rate * 100.0, group = opts_ndp, color = opts_ndp)) +
-  ylim(0, 100) +
-  geom_point(stat = 'identity', aes(shape = opts_ndp)) +
+  coord_cartesian(ylim=c(0, 70), xlim=c(0, max(t_data$opts_req_rps))) +
+  geom_point(aes(shape = opts_ndp)) +
   geom_line() +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
   labs(title = "Error rate", color = "% NDP", shape = "% NDP") +
@@ -129,6 +146,26 @@ ggplot(t_data) +
   scale_y_continuous(trans = 'identity', expand = c(0.1,0), limits = c(0, NA), label = scales::label_comma(accuracy = 1)) +
   labs(title = "Total bytes per request sent over network") +
   xlab("Req/s") + ylab("bytes/request")
+```
+
+```{r cpums_load}
+gplt <- ggplot(t_data,
+    aes(x = opts_req_rps, group = opts_ndp, color = opts_ndp)) +
+  coord_cartesian(ylim = c(0, 100)) +
+  paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
+  geom_line(aes(linetype="Compute", y = 100.0*(monitor_computecpums_user_sum + monitor_computecpums_nice_sum + monitor_computecpums_system_sum + monitor_computecpums_irq_sum + monitor_computecpums_softirq_sum)/(monitor_computecpums_user_sum + monitor_computecpums_nice_sum + monitor_computecpums_system_sum + monitor_computecpums_idle_sum + monitor_computecpums_iowait_sum + monitor_computecpums_irq_sum + monitor_computecpums_softirq_sum))) +
+  geom_point(aes(shape=opts_ndp, y = 100.0*(monitor_computecpums_user_sum + monitor_computecpums_nice_sum + monitor_computecpums_system_sum + monitor_computecpums_irq_sum + monitor_computecpums_softirq_sum)/(monitor_computecpums_user_sum + monitor_computecpums_nice_sum + monitor_computecpums_system_sum + monitor_computecpums_idle_sum + monitor_computecpums_iowait_sum + monitor_computecpums_irq_sum + monitor_computecpums_softirq_sum))) +
+  geom_line(aes(linetype="Storage", y = 100.0*(monitor_storagecpums_user_sum + monitor_storagecpums_nice_sum + monitor_storagecpums_system_sum + monitor_storagecpums_irq_sum + monitor_storagecpums_softirq_sum)/(monitor_storagecpums_user_sum + monitor_storagecpums_nice_sum + monitor_storagecpums_system_sum + monitor_storagecpums_idle_sum + monitor_storagecpums_iowait_sum + monitor_storagecpums_irq_sum + monitor_storagecpums_softirq_sum))) +
+  geom_point(aes(shape=opts_ndp, y = 100.0*(monitor_storagecpums_user_sum + monitor_storagecpums_nice_sum + monitor_storagecpums_system_sum + monitor_storagecpums_irq_sum + monitor_storagecpums_softirq_sum)/(monitor_storagecpums_user_sum + monitor_storagecpums_nice_sum + monitor_storagecpums_system_sum + monitor_storagecpums_idle_sum + monitor_storagecpums_iowait_sum + monitor_storagecpums_irq_sum + monitor_storagecpums_softirq_sum))) +
+  scale_x_log10(breaks = log_breaks(n=10), label = scales::label_comma(accuracy = 0.1)) +
+  scale_y_continuous(breaks = pretty_breaks(n=10), label = scales::label_comma(accuracy = 1)) +
+  labs(title = "CPU load", color = "% NDP", shape = "% NDP", linetype = "Node") +
+  xlab("Throughput [requests/second]") + ylab("Cpu usage (%)")
+
+pdf(paste0(paper_plot_path, "cpu_load.pdf"), width=paper_plot_w, height=paper_plot_h, useDingbats = FALSE, family = paper_font, pointsize = paper_pointsize)
+plot(gplt)
+dev.off()
+gplt
 ```
 
 ```{r plot_cpu_load}
