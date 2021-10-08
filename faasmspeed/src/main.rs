@@ -92,6 +92,7 @@ struct RequestResult {
 async fn async_main(opts: &'static Options) -> Result<()> {
     let client = make_client()?;
     eprintln!("[status] Created an HTTP client");
+    let force_ndp = opts.offload_frac_num > opts.offload_frac_den;
     // (no ndp, ndp)
     let request_pool: Vec<_> = opts
         .input_data
@@ -102,7 +103,8 @@ async fn async_main(opts: &'static Options) -> Result<()> {
                     &client,
                     &opts.url,
                     Box::leak(
-                        make_json_call(&opts.user, &opts.function, data, true).into_boxed_str(),
+                        make_json_call(&opts.user, &opts.function, data, true, force_ndp)
+                            .into_boxed_str(),
                     ),
                     opts.timeout,
                 )?,
@@ -110,7 +112,8 @@ async fn async_main(opts: &'static Options) -> Result<()> {
                     &client,
                     &opts.url,
                     Box::leak(
-                        make_json_call(&opts.user, &opts.function, data, false).into_boxed_str(),
+                        make_json_call(&opts.user, &opts.function, data, false, force_ndp)
+                            .into_boxed_str(),
                     ),
                     opts.timeout,
                 )?,
@@ -192,7 +195,7 @@ async fn async_main(opts: &'static Options) -> Result<()> {
             ndp_var -= opts.offload_frac_den;
         }
         let allow_ndp = ndp_var <= opts.offload_frac_num;
-        let request = if allow_ndp {
+        let request = if allow_ndp || force_ndp {
             ndp_reqs += 1;
             &request_pool[which_request].1
         } else {
@@ -401,13 +404,24 @@ fn make_client() -> Result<reqwest::Client> {
         .build()?)
 }
 
-fn make_json_call(user: &str, function: &str, input_data: &str, forbid_ndp: bool) -> String {
+fn make_json_call(
+    user: &str,
+    function: &str,
+    input_data: &str,
+    forbid_ndp: bool,
+    force_storage: bool,
+) -> String {
     format!(
-        r#"{{"user":"{}","function":"{}","input_data":"{}","forbid_ndp":{}}}"#,
+        r#"{{"user":"{}","function":"{}","input_data":"{}","forbid_ndp":{}{}}}"#,
         user,
         function,
         input_data,
-        if forbid_ndp { "true" } else { "false" }
+        if forbid_ndp { "true" } else { "false" },
+        if force_storage {
+            ",\"is_storage\":true"
+        } else {
+            ""
+        }
     )
 }
 
