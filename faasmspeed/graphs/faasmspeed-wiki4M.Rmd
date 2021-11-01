@@ -25,7 +25,7 @@ t_data <- raw_csv %>%
     opts_host = factor(opts_host),
     opts_user = factor(opts_user),
     opts_function = factor(opts_function),
-    opts_ndp = factor(opts_ndp, levels = c(0, 0.25, 0.5, 0.75, 1), labels = c("0%", "25%", "50%", "75%", "100%")),
+    opts_ndp = factor(opts_ndp, levels = c(0, 0.25, 0.5, 0.75, 1, 1.25), labels = c("0%", "25%", "50%", "75%", "100%", "AoS")),
     total_requests = (errors_count + results_count),
     error_rate = errors_count / (errors_count + results_count),
     # Work around bad outlier removal, use q3+1.5*IQR as an estimate of max non-outlier value
@@ -38,7 +38,7 @@ usms <- 1.0/1000.0
 uss <- usms/1000.0
 
 paper_plot_w <- 4
-paper_plot_h <- 3
+paper_plot_h <- 2.5
 paper_font <- "serif"
 paper_pointsize <- 10
 paper_theme <- theme_minimal() +
@@ -46,8 +46,10 @@ paper_theme <- theme_minimal() +
     plot.title=element_blank(),
     legend.margin=margin(0,0,0,0,"cm")
   )
-paper_disc_scale <- scale_color_brewer(palette = "Set1")
-paper_fill_scale <- scale_fill_brewer(palette = "Set1")
+set1_scale <- brewer_pal(palette="Set1")(7)
+set1_scale[6] = set1_scale[7]
+paper_disc_scale <- scale_color_manual(values = set1_scale)
+paper_fill_scale <- scale_fill_manual(values = set1_scale)
 paper_shape_scale <- scale_shape(solid = FALSE)
 
 paper_plot_path <- paste0('plots/', function_name, '_')
@@ -160,6 +162,23 @@ gplt <- ggplot(t_data %>% filter(rps_offset < 0.05),
   scale_x_log10(breaks = log_breaks(n=10), label = scales::label_comma(accuracy = 0.1)) +
   scale_y_continuous(breaks = pretty_breaks(n=10), label = scales::label_comma(accuracy = 1)) +
   labs(title = "CPU load", color = "% NDP", shape = "% NDP", linetype = "Node") +
+  xlab("Throughput [requests/second]") + ylab("Cpu usage (%)")
+
+pdf(paste0(paper_plot_path, "cpu_load.pdf"), width=paper_plot_w, height=paper_plot_h, useDingbats = FALSE, family = paper_font, pointsize = paper_pointsize)
+plot(gplt)
+dev.off()
+gplt
+```
+
+```{r total_utilization}
+gplt <- ggplot(t_data %>% filter(rps_offset < 0.05),
+    aes(x = opts_req_rps, group = opts_ndp, color = opts_ndp)) +
+  coord_cartesian(ylim = c(0, 100)) +
+  paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
+  geom_line(aes(y = 50.0*(monitor_storagecpums_user_sum + monitor_storagecpums_nice_sum + monitor_storagecpums_system_sum + monitor_storagecpums_irq_sum + monitor_storagecpums_softirq_sum)/(monitor_storagecpums_user_sum + monitor_storagecpums_nice_sum + monitor_storagecpums_system_sum + monitor_storagecpums_idle_sum + monitor_storagecpums_iowait_sum + monitor_storagecpums_irq_sum + monitor_storagecpums_softirq_sum) + 50.0*(monitor_computecpums_user_sum + monitor_computecpums_nice_sum + monitor_computecpums_system_sum + monitor_computecpums_irq_sum + monitor_computecpums_softirq_sum)/(monitor_computecpums_user_sum + monitor_computecpums_nice_sum + monitor_computecpums_system_sum + monitor_computecpums_idle_sum + monitor_computecpums_iowait_sum + monitor_computecpums_irq_sum + monitor_computecpums_softirq_sum))) +
+  scale_x_log10(breaks = log_breaks(n=10), label = scales::label_comma(accuracy = 0.1)) +
+  scale_y_continuous(breaks = pretty_breaks(n=10), label = scales::label_comma(accuracy = 1)) +
+  labs(title = "CPU load", color = "% NDP", shape = "% NDP") +
   xlab("Throughput [requests/second]") + ylab("Cpu usage (%)")
 
 pdf(paste0(paper_plot_path, "cpu_load.pdf"), width=paper_plot_w, height=paper_plot_h, useDingbats = FALSE, family = paper_font, pointsize = paper_pointsize)
