@@ -11,3 +11,4 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 
 add_executable(faultspeed src/faultspeed.cpp)
 target_link_libraries(faultspeed PRIVATE ${CONAN_LIBS})
+target_compile_options(faultspeed PRIVATE -Wall -Wextra)
