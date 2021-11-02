@@ -67,6 +67,8 @@ struct UserfaultFd {
     clear();
     int result = syscall(SYS_userfaultfd, flags);
     if (result < 0) {
+      errno = -result;
+      perror("Error creating userfaultfd");
       throw std::runtime_error("Couldn't create userfaultfd");
     }
     fd = result;
@@ -130,19 +132,16 @@ struct UserfaultFd {
   std::optional<uffd_msg> readEvent() {
     checkFd();
     uffd_msg ev;
-    int result = EAGAIN;
-    while (result == EAGAIN) {
-      int result = read(fd, (void *)&ev, sizeof(uffd_msg));
-      if (result < 0) {
-        result = errno;
-        if (result == EAGAIN) {
-          continue;
-        } else if (result == EWOULDBLOCK) {
-          return std::nullopt;
-        } else {
-          perror("read from UFFD error");
-          throw std::runtime_error("Error reading from the UFFD");
-        }
+  retry:
+    int result = read(fd, (void *)&ev, sizeof(uffd_msg));
+    if (result < 0) {
+      if (errno == EAGAIN) {
+        goto retry;
+      } else if (errno == EWOULDBLOCK) {
+        return std::nullopt;
+      } else {
+        perror("read from UFFD error");
+        throw std::runtime_error("Error reading from the UFFD");
       }
     }
     return ev;
@@ -428,6 +427,7 @@ struct UffdHandler {
   std::atomic_uint64_t faults = 0;
 
   UffdHandler() {
+    fprintf(stderr, "Starting UFFD handler\n");
     uffd.create(O_CLOEXEC);
     pageSize = sysconf(_SC_PAGESIZE);
     for (int i = 0; i < 4; i++) {
@@ -437,6 +437,7 @@ struct UffdHandler {
 
   void workerThread() {
     try {
+      fprintf(stderr, "UFFD Worker start\n");
       while (true) {
         uffd_msg m = uffd.readEvent().value();
         if (m.event != UFFD_EVENT_PAGEFAULT) {
@@ -449,6 +450,7 @@ struct UffdHandler {
         const uint64_t flags = m.arg.pagefault.flags;
         // align to page boundary
         const uint64_t address = m.arg.pagefault.address & ~(pageSize - 1);
+        // fprintf(stderr, "PF %zx\n", size_t(address));
         std::shared_lock<std::shared_mutex> lock(mappingsMx);
         const auto it = mappings.lower_bound(address - WMEM_SIZE + 1);
         if (it == mappings.end()) {
@@ -507,8 +509,12 @@ struct UffdHandler {
       std::unique_lock<std::shared_mutex> _l(mappingsMx);
       mappings[addr] = &wmem;
     }
+    if (mprotect(wmem.base, WMEM_SIZE / 2, PROT_READ | PROT_WRITE) < 0) {
+      perror("Mprotect error when adding UFFD range");
+      throw std::runtime_error(
+          "Couldn't unprotect memory range when enabling UFFD");
+    }
     uffd.register_address_range(addr, WMEM_SIZE, true, true);
-    uffd.writeProtectPages(addr, WMEM_SIZE, true);
   }
 
   void remove(WMemory &wmem) {
@@ -740,7 +746,7 @@ void BM_UFFD_Lazy(benchmark::State &state) {
   }
   uffdHandler().remove(func);
 }
-BENCHMARK(BM_UFFD_Eager)
+BENCHMARK(BM_UFFD_Lazy)
 FAULTSPEED_COMMON_CONFIG;
 
 BENCHMARK_MAIN();
