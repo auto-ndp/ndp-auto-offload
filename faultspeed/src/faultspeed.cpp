@@ -1,6 +1,7 @@
 #include <benchmark/benchmark.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -17,9 +18,35 @@
 #include <unistd.h>
 #include <utility>
 
+#define NOINLINE __attribute__((noinline))
+
 void on_errno(const char *msg) {
   perror(msg);
   throw std::runtime_error(msg);
+}
+
+struct CpuTimes {
+  uint64_t active, idle;
+};
+
+CpuTimes perf_cpu_times() {
+  FILE *fp = fopen("/proc/stat", "rb");
+  unsigned long long tUser{0}, tNice{0}, tSystem{0}, tIdle{0}, tIowait{0},
+      tIrq{0}, tSoftIrq{0};
+  fscanf(fp, "cpu %llu %llu %llu %llu %llu %llu %llu", &tUser, &tNice, &tSystem,
+         &tIdle, &tIowait, &tIrq, &tSoftIrq);
+  fclose(fp);
+  uint64_t tActive = tUser + tNice + tSystem + tIrq + tSoftIrq;
+  uint64_t tSumIdle = tIdle + tIowait;
+  return (CpuTimes){.active = tActive, .idle = tSumIdle};
+}
+
+float cpu_utilization(CpuTimes pre, CpuTimes post) {
+  uint64_t dActive = post.active - pre.active;
+  uint64_t dIdle = post.idle - pre.idle;
+  uint64_t dTotal = dActive + dIdle;
+  double util = double(dActive) / double(dTotal);
+  return float(util);
 }
 
 inline constexpr size_t WMEM_SIZE = 8ull * 1024ull * 1024ull * 1024ull;
@@ -34,7 +61,7 @@ struct WMemory {
   std::byte *base = nullptr;
   size_t size = 0;
 
-  WMemory() {
+  WMemory() NOINLINE {
     base = (std::byte *)mmap(0x0, WMEM_SIZE, PROT_NONE,
                              MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     if (base == MAP_FAILED || base == nullptr) {
@@ -44,7 +71,7 @@ struct WMemory {
     madvise((void *)base, WMEM_SIZE, MADV_HUGEPAGE);
   }
 
-  ~WMemory() {
+  ~WMemory() NOINLINE {
     if (base != nullptr) {
       int result = munmap((void *)base, WMEM_SIZE);
       base = nullptr;
@@ -62,35 +89,43 @@ struct WMemory {
     return std::span(base, size);
   }
 
-  void fillWithData(size_t from = 0, size_t upTo = WMEM_SIZE) {
-    upTo = (upTo > size) ? size : upTo;
-    if (from >= upTo) {
-      return;
+  void sideEffect() const NOINLINE {
+    asm("");
+    uint8_t v = 0;
+    for (const auto byte : data()) {
+      v += uint8_t(byte);
     }
-    std::ranges::fill(data().subspan(from, upTo - from),
-                      std::byte(rand() % 0xFF));
+    benchmark::DoNotOptimize(v);
+  }
+
+  void fillWithData(size_t from = 0, size_t upTo = WMEM_SIZE) NOINLINE {
+    from = std::min(from, size);
+    size_t len = std::min(upTo - from, size - from);
+    auto sp = data().subspan(from, len);
+    // fprintf(stderr, "fill %lx bytes\n", (long)sp.size());
+    static std::atomic_uint8_t xinit = 0;
+    uint8_t x = xinit.fetch_add(1, std::memory_order_acq_rel);
+    for (auto &byte : sp) {
+      byte = std::byte(x++);
+    }
   }
 
   // ---- No protection at all
-  void setupNoProtect() { resizeWavm(WMEM_SIZE / 2); }
-
-  void resizeNoProtect(size_t newSize) {
-    const size_t oldSize = size;
-    if (newSize < oldSize) {
-      std::ranges::fill(data().subspan(newSize), std::byte(0x0));
-    }
-    size = newSize;
+  void setupNoProtect() NOINLINE {
+    resizeWavm(WMEM_SIZE / 2);
+    fillWithData(0, WORK_SIZE);
   }
 
-  void restoreFromNoProtect(const WMemory &other) {
+  void resizeNoProtect(size_t newSize) NOINLINE { size = newSize; }
+
+  void restoreFromNoProtect(const WMemory &other) NOINLINE {
     resizeNoProtect(other.size);
     std::ranges::copy(other.data(), base);
   }
 
   // ---- WAVM-style implementation
-  void resizeWavm(size_t newSize) {
+  void resizeWavm(size_t newSize) NOINLINE {
     const size_t oldSize = size;
-    newSize = ((newSize + 4095) / 4096) * 4096;
     if (newSize < oldSize) {
       void *result = mmap(base + newSize, oldSize - newSize, PROT_NONE,
                           MAP_FIXED | MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
@@ -105,9 +140,10 @@ struct WMemory {
         on_errno("MProtect resize WAVM failed");
       }
     }
+    size = newSize;
   }
 
-  void restoreFromWavm(const WMemory &other) {
+  void restoreFromWavm(const WMemory &other) NOINLINE {
     resizeWavm(other.size);
     std::ranges::copy(other.data(), base);
   }
@@ -116,9 +152,8 @@ struct WMemory {
   // taking an exclusive MM lock Optional use of mprotect to set pages back to
   // prot_none - to check the cost of those calls
 
-  void resizeWavmDontneed(size_t newSize, bool useMprotect) {
+  void resizeWavmDontneed(size_t newSize, bool useMprotect) NOINLINE {
     const size_t oldSize = size;
-    newSize = ((newSize + 4095) / 4096) * 4096;
     if (newSize < oldSize) {
       int result =
           madvise((void *)(base + newSize), oldSize - newSize, MADV_DONTNEED);
@@ -138,9 +173,10 @@ struct WMemory {
         on_errno("MProtect resize WAVM-Dontneed failed");
       }
     }
+    size = newSize;
   }
 
-  void restoreFromDontneed(const WMemory &other, bool useMprotect) {
+  void restoreFromDontneed(const WMemory &other, bool useMprotect) NOINLINE {
     resizeWavmDontneed(other.size, useMprotect);
     std::ranges::copy(other.data(), base);
   }
@@ -165,76 +201,146 @@ void BM_NoProtection(benchmark::State &state) {
   const WMemory &snapshot = getSnapshot();
   WMemory func;
   func.setupNoProtect();
+  CpuTimes ct_pre;
+  if (state.thread_index() == 0) {
+    ct_pre = perf_cpu_times();
+  }
   for (auto _ : state) {
     func.restoreFromNoProtect(snapshot);
-    benchmark::DoNotOptimize(func.base);
+    func.sideEffect();
     func.fillWithData(WORK_FILL_START);
-    benchmark::DoNotOptimize(func.base);
+    func.sideEffect();
     func.resizeNoProtect(WORK_SIZE);
-    benchmark::DoNotOptimize(func.base);
+    func.sideEffect();
     func.fillWithData(WORK_FILL_START);
-    benchmark::DoNotOptimize(func.base);
+    func.sideEffect();
     benchmark::DoNotOptimize(func);
   }
+  if (state.thread_index() == 0) {
+    const CpuTimes ct_post = perf_cpu_times();
+    const float utilization = cpu_utilization(ct_pre, ct_post);
+    state.counters["CPU_Utilization"] = utilization;
+    state.counters["CPU_Utilization_per_thread"] =
+        utilization * std::thread::hardware_concurrency() / state.threads();
+  }
 }
-BENCHMARK(BM_NoProtection)->UseRealTime()->ThreadRange(1, 64);
+BENCHMARK(BM_NoProtection)
+    ->UseRealTime()
+    ->Threads(1)
+    ->Threads(8)
+    ->Threads(16)
+    ->Threads(24)
+    ->Threads(32)
+    ->Threads(64);
 
 // Starting a function the slow way (no mapping reuse)
 void BM_FullNewMapping(benchmark::State &state) {
   const WMemory &snapshot = getSnapshot();
+  CpuTimes ct_pre;
+  if (state.thread_index() == 0) {
+    ct_pre = perf_cpu_times();
+  }
   for (auto _ : state) {
     WMemory func;
     func.restoreFromWavm(snapshot);
-    benchmark::DoNotOptimize(func.base);
+    func.sideEffect();
     func.fillWithData(WORK_FILL_START);
-    benchmark::DoNotOptimize(func.base);
+    func.sideEffect();
     func.resizeWavm(WORK_SIZE);
-    benchmark::DoNotOptimize(func.base);
+    func.sideEffect();
     func.fillWithData(WORK_FILL_START);
-    benchmark::DoNotOptimize(func.base);
+    func.sideEffect();
     benchmark::DoNotOptimize(func);
   }
+  if (state.thread_index() == 0) {
+    const CpuTimes ct_post = perf_cpu_times();
+    const float utilization = cpu_utilization(ct_pre, ct_post);
+    state.counters["CPU_Utilization"] = utilization;
+    state.counters["CPU_Utilization_per_thread"] =
+        utilization * std::thread::hardware_concurrency() / state.threads();
+  }
 }
-BENCHMARK(BM_FullNewMapping)->UseRealTime()->ThreadRange(1, 64);
+BENCHMARK(BM_FullNewMapping)
+    ->UseRealTime()
+    ->Threads(1)
+    ->Threads(8)
+    ->Threads(16)
+    ->Threads(24)
+    ->Threads(32)
+    ->Threads(64);
 
 // Starting a function the slow way, but reuse existing memory object
 void BM_ReuseMapping(benchmark::State &state) {
   const WMemory &snapshot = getSnapshot();
   WMemory func;
+  CpuTimes ct_pre;
+  if (state.thread_index() == 0) {
+    ct_pre = perf_cpu_times();
+  }
   for (auto _ : state) {
     func.restoreFromWavm(snapshot);
-    benchmark::DoNotOptimize(func.base);
+    func.sideEffect();
     func.fillWithData(WORK_FILL_START);
-    benchmark::DoNotOptimize(func.base);
+    func.sideEffect();
     func.resizeWavm(WORK_SIZE);
-    benchmark::DoNotOptimize(func.base);
+    func.sideEffect();
     func.fillWithData(WORK_FILL_START);
-    benchmark::DoNotOptimize(func.base);
+    func.sideEffect();
     benchmark::DoNotOptimize(func);
   }
+  if (state.thread_index() == 0) {
+    const CpuTimes ct_post = perf_cpu_times();
+    const float utilization = cpu_utilization(ct_pre, ct_post);
+    state.counters["CPU_Utilization"] = utilization;
+    state.counters["CPU_Utilization_per_thread"] =
+        utilization * std::thread::hardware_concurrency() / state.threads();
+  }
 }
-BENCHMARK(BM_ReuseMapping)->UseRealTime()->ThreadRange(1, 64);
+BENCHMARK(BM_ReuseMapping)
+    ->UseRealTime()
+    ->Threads(1)
+    ->Threads(8)
+    ->Threads(16)
+    ->Threads(24)
+    ->Threads(32)
+    ->Threads(64);
 
 // Starting a function the slow way, but reuse existing memory object
 void BM_ReuseAndDontneed(benchmark::State &state) {
   const WMemory &snapshot = getSnapshot();
   const bool useMprotect = (state.range(0) > 0);
   WMemory func;
+  CpuTimes ct_pre;
+  if (state.thread_index() == 0) {
+    ct_pre = perf_cpu_times();
+  }
   for (auto _ : state) {
     func.restoreFromDontneed(snapshot, useMprotect);
-    benchmark::DoNotOptimize(func.base);
+    func.sideEffect();
     func.fillWithData(WORK_FILL_START);
-    benchmark::DoNotOptimize(func.base);
+    func.sideEffect();
     func.resizeWavmDontneed(WORK_SIZE, useMprotect);
-    benchmark::DoNotOptimize(func.base);
+    func.sideEffect();
     func.fillWithData(WORK_FILL_START);
-    benchmark::DoNotOptimize(func.base);
+    func.sideEffect();
     benchmark::DoNotOptimize(func);
+  }
+  if (state.thread_index() == 0) {
+    const CpuTimes ct_post = perf_cpu_times();
+    const float utilization = cpu_utilization(ct_pre, ct_post);
+    state.counters["CPU_Utilization"] = utilization;
+    state.counters["CPU_Utilization_per_thread"] =
+        utilization * std::thread::hardware_concurrency() / state.threads();
   }
 }
 BENCHMARK(BM_ReuseAndDontneed)
     ->UseRealTime()
-    ->ThreadRange(1, 64)
+    ->Threads(1)
+    ->Threads(8)
+    ->Threads(16)
+    ->Threads(24)
+    ->Threads(32)
+    ->Threads(64)
     ->DenseRange(0, 1)
     ->ArgName("use_mprotect");
 
