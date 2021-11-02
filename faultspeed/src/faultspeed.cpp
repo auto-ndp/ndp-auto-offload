@@ -5,9 +5,12 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <ranges>
+#include <shared_mutex>
+#include <signal.h>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -68,7 +71,7 @@ struct UserfaultFd {
     }
     fd = result;
     api.api = UFFD_API;
-    api.features = 0;
+    api.features = UFFD_FEATURE_THREAD_ID;
     api.ioctls = 0;
     result = ioctl(fd, UFFDIO_API, &api);
     if (result < 0) {
@@ -396,7 +399,132 @@ struct WMemory {
     resizeWavmDontneed(other.size, useMprotect);
     std::ranges::copy(other.data(), base);
   }
+
+  // ---- UFFD-style implementation
+  void resizeWavmUffd(size_t newSize) NOINLINE {
+    const size_t oldSize = size;
+    if (newSize < oldSize) {
+      int result =
+          madvise((void *)(base + newSize), oldSize - newSize, MADV_DONTNEED);
+      if (result < 0) {
+        on_errno("Resize WAVM-Uffd failed");
+      }
+    }
+    size = newSize;
+  }
+
+  void restoreFromUffd(const WMemory &other) NOINLINE {
+    resizeWavmUffd(other.size);
+    std::ranges::copy(other.data(), base);
+  }
 };
+
+struct UffdHandler {
+  UserfaultFd uffd;
+  size_t pageSize;
+  std::shared_mutex mappingsMx;
+  WMemory const *snapshot = nullptr;
+  std::map<size_t, WMemory *> mappings;
+  std::atomic_uint64_t faults = 0;
+
+  UffdHandler() {
+    uffd.create(O_CLOEXEC);
+    pageSize = sysconf(_SC_PAGESIZE);
+    for (int i = 0; i < 4; i++) {
+      std::thread([&]() { this->workerThread(); }).detach();
+    }
+  }
+
+  void workerThread() {
+    try {
+      while (true) {
+        uffd_msg m = uffd.readEvent().value();
+        if (m.event != UFFD_EVENT_PAGEFAULT) {
+          fprintf(stderr,
+                  "Caught event of type %d which is not UFFD_EVENT_PAGEFAULT\n",
+                  int(m.event));
+          std::terminate();
+        }
+        const uint32_t tid = m.arg.pagefault.feat.ptid;
+        const uint64_t flags = m.arg.pagefault.flags;
+        // align to page boundary
+        const uint64_t address = m.arg.pagefault.address & ~(pageSize - 1);
+        std::shared_lock<std::shared_mutex> lock(mappingsMx);
+        const auto it = mappings.lower_bound(address - WMEM_SIZE + 1);
+        if (it == mappings.end()) {
+          fprintf(stderr,
+                  "[1] Couldn't find mapping corresponding to address %llu\n",
+                  static_cast<unsigned long long>(address));
+          std::terminate();
+        }
+        const WMemory *wmem = it->second;
+        lock.unlock();
+        const size_t wmem_base = size_t(wmem->base);
+        if (address < wmem_base || address >= wmem_base + WMEM_SIZE) {
+          fprintf(stderr,
+                  "[2] Couldn't find mapping corresponding to address %llu\n",
+                  static_cast<unsigned long long>(address));
+          std::terminate();
+        }
+        const bool writePf = flags & UFFD_PAGEFAULT_FLAG_WRITE;
+        const bool writeProtectionChangePf = flags & UFFD_PAGEFAULT_FLAG_WP;
+        const bool inBounds = m.arg.pagefault.address < wmem_base + wmem->size;
+        if (!inBounds) {
+          kill(tid, SIGSEGV);
+          uffd.wakePages(address, pageSize);
+          continue;
+        }
+        faults.fetch_add(1, std::memory_order_acq_rel);
+        if (writeProtectionChangePf) {
+          // dirty page
+          uffd.writeProtectPages(address, pageSize, false, false);
+          continue;
+        }
+        if (snapshot != nullptr && address < snapshot->size) {
+          const size_t snapshot_base = size_t(snapshot->base);
+          uffd.copyPages(address, pageSize, snapshot_base, !writePf, false);
+          // writePf -> dirty page
+          continue;
+        } else {
+          // dirty page
+          uffd.zeroPages(address, pageSize, false);
+          continue;
+        }
+      }
+    } catch (std::exception &e) {
+      fprintf(stderr, "Caught exception in UFFD worker thred: %s\n", e.what());
+    }
+  }
+
+  void setSnapshot(WMemory const *wmem) {
+    std::unique_lock<std::shared_mutex> _l(mappingsMx);
+    snapshot = wmem;
+  }
+
+  void add(WMemory &wmem) {
+    size_t addr = size_t(wmem.base);
+    {
+      std::unique_lock<std::shared_mutex> _l(mappingsMx);
+      mappings[addr] = &wmem;
+    }
+    uffd.register_address_range(addr, WMEM_SIZE, true, true);
+    uffd.writeProtectPages(addr, WMEM_SIZE, true);
+  }
+
+  void remove(WMemory &wmem) {
+    size_t addr = size_t(wmem.base);
+    uffd.unregister_address_range(addr, WMEM_SIZE);
+    {
+      std::unique_lock<std::shared_mutex> _l(mappingsMx);
+      mappings.erase(addr);
+    }
+  }
+};
+
+UffdHandler &uffdHandler() {
+  static UffdHandler h{};
+  return h;
+}
 
 static std::once_flag snapshotInitFlag;
 
@@ -411,6 +539,15 @@ const WMemory &getSnapshot() {
       snapshot);
   return snapshot;
 }
+
+#define FAULTSPEED_COMMON_CONFIG                                               \
+  ->UseRealTime()                                                              \
+      ->Threads(1)                                                             \
+      ->Threads(8)                                                             \
+      ->Threads(16)                                                            \
+      ->Threads(24)                                                            \
+      ->Threads(32)                                                            \
+      ->Threads(64)
 
 // Fastest possible way, no memory protection or touching bindings at all
 void BM_NoProtection(benchmark::State &state) {
@@ -441,13 +578,7 @@ void BM_NoProtection(benchmark::State &state) {
   }
 }
 BENCHMARK(BM_NoProtection)
-    ->UseRealTime()
-    ->Threads(1)
-    ->Threads(8)
-    ->Threads(16)
-    ->Threads(24)
-    ->Threads(32)
-    ->Threads(64);
+FAULTSPEED_COMMON_CONFIG;
 
 // Starting a function the slow way (no mapping reuse)
 void BM_FullNewMapping(benchmark::State &state) {
@@ -477,13 +608,7 @@ void BM_FullNewMapping(benchmark::State &state) {
   }
 }
 BENCHMARK(BM_FullNewMapping)
-    ->UseRealTime()
-    ->Threads(1)
-    ->Threads(8)
-    ->Threads(16)
-    ->Threads(24)
-    ->Threads(32)
-    ->Threads(64);
+FAULTSPEED_COMMON_CONFIG;
 
 // Starting a function the slow way, but reuse existing memory object
 void BM_ReuseMapping(benchmark::State &state) {
@@ -513,15 +638,9 @@ void BM_ReuseMapping(benchmark::State &state) {
   }
 }
 BENCHMARK(BM_ReuseMapping)
-    ->UseRealTime()
-    ->Threads(1)
-    ->Threads(8)
-    ->Threads(16)
-    ->Threads(24)
-    ->Threads(32)
-    ->Threads(64);
+FAULTSPEED_COMMON_CONFIG;
 
-// Starting a function the slow way, but reuse existing memory object
+// Use madv_dontneed for lower kernel lock contention
 void BM_ReuseAndDontneed(benchmark::State &state) {
   const WMemory &snapshot = getSnapshot();
   const bool useMprotect = (state.range(0) > 0);
@@ -550,14 +669,78 @@ void BM_ReuseAndDontneed(benchmark::State &state) {
   }
 }
 BENCHMARK(BM_ReuseAndDontneed)
-    ->UseRealTime()
-    ->Threads(1)
-    ->Threads(8)
-    ->Threads(16)
-    ->Threads(24)
-    ->Threads(32)
-    ->Threads(64)
-    ->DenseRange(0, 1)
-    ->ArgName("use_mprotect");
+FAULTSPEED_COMMON_CONFIG->DenseRange(0, 1)->ArgName("use_mprotect");
+
+// UFFD handler, pre-filling the memory with data proactively
+void BM_UFFD_Eager(benchmark::State &state) {
+  const WMemory &snapshot = getSnapshot();
+  WMemory func;
+  CpuTimes ct_pre;
+  if (state.thread_index() == 0) {
+    uffdHandler().setSnapshot(nullptr); // use zero-page filling
+    uffdHandler().faults.store(0);
+    ct_pre = perf_cpu_times();
+  }
+  uffdHandler().add(func);
+  for (auto _ : state) {
+    func.restoreFromUffd(snapshot);
+    func.sideEffect();
+    func.fillWithData(WORK_FILL_START);
+    func.sideEffect();
+    func.resizeWavmUffd(WORK_SIZE);
+    func.sideEffect();
+    func.fillWithData(WORK_FILL_START);
+    func.sideEffect();
+    benchmark::DoNotOptimize(func);
+  }
+  if (state.thread_index() == 0) {
+    const CpuTimes ct_post = perf_cpu_times();
+    const float utilization = cpu_utilization(ct_pre, ct_post);
+    state.counters["UFFD_Faults"] = uffdHandler().faults.load();
+    state.counters["CPU_Utilization"] = utilization;
+    state.counters["CPU_Utilization_per_thread"] =
+        utilization * std::thread::hardware_concurrency() / state.threads();
+  }
+  uffdHandler().remove(func);
+}
+BENCHMARK(BM_UFFD_Eager)
+FAULTSPEED_COMMON_CONFIG;
+
+// UFFD handler, filling the memory with snapshot data as-needed
+void BM_UFFD_Lazy(benchmark::State &state) {
+  const WMemory &snapshot = getSnapshot();
+  WMemory func;
+  CpuTimes ct_pre;
+  if (state.thread_index() == 0) {
+    uffdHandler().setSnapshot(&snapshot);
+    uffdHandler().faults.store(0);
+    ct_pre = perf_cpu_times();
+  }
+  uffdHandler().add(func);
+  for (auto _ : state) {
+    func.resizeWavmUffd(0);
+    func.sideEffect();
+    func.resizeWavmUffd(SNAP_SIZE);
+    func.sideEffect();
+    func.fillWithData(WORK_FILL_START);
+    func.sideEffect();
+    func.resizeWavmUffd(WORK_SIZE);
+    func.sideEffect();
+    func.fillWithData(WORK_FILL_START);
+    func.sideEffect();
+    benchmark::DoNotOptimize(func);
+  }
+  if (state.thread_index() == 0) {
+    const CpuTimes ct_post = perf_cpu_times();
+    const float utilization = cpu_utilization(ct_pre, ct_post);
+    state.counters["UFFD_Faults"] = uffdHandler().faults.load();
+    state.counters["CPU_Utilization"] = utilization;
+    state.counters["CPU_Utilization_per_thread"] =
+        utilization * std::thread::hardware_concurrency() / state.threads();
+  }
+  uffdHandler().remove(func);
+}
+BENCHMARK(BM_UFFD_Eager)
+FAULTSPEED_COMMON_CONFIG;
 
 BENCHMARK_MAIN();
