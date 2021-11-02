@@ -15,8 +15,224 @@
 #include <sys/mman.h>
 #include <sys/poll.h>
 #include <thread>
-#include <unistd.h>
 #include <utility>
+
+// Userfaultfd
+#include <fcntl.h>
+#include <linux/userfaultfd.h>
+#include <sys/ioctl.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+
+struct UserfaultFd {
+  int fd = -1;
+  uffdio_api api = {};
+
+  // Only allow moving, not copying - owns the fd
+  UserfaultFd() {}
+  ~UserfaultFd() { clear(); }
+  UserfaultFd(const UserfaultFd &) = delete;
+  UserfaultFd(UserfaultFd &&other) { this->operator=(std::move(other)); }
+  UserfaultFd &operator=(const UserfaultFd &) = delete;
+  UserfaultFd &operator=(UserfaultFd &&other) {
+    fd = other.fd;
+    api = other.api;
+    other.fd = -1;
+    other.api = {};
+    return *this;
+  }
+
+  // Close fd if present
+  void clear() {
+    if (fd >= 0) {
+      close(fd);
+      fd = -1;
+      api = {};
+    }
+  }
+
+  // Release ownership and return the fd
+  std::pair<int, uffdio_api> release() {
+    int oldFd = fd;
+    uffdio_api oldApi = api;
+    fd = -1;
+    api = {};
+    return std::make_pair(oldFd, oldApi);
+  }
+
+  void create(int flags = 0) {
+    clear();
+    int result = syscall(SYS_userfaultfd, flags);
+    if (result < 0) {
+      throw std::runtime_error("Couldn't create userfaultfd");
+    }
+    fd = result;
+    api.api = UFFD_API;
+    api.features = 0;
+    api.ioctls = 0;
+    result = ioctl(fd, UFFDIO_API, &api);
+    if (result < 0) {
+      throw std::runtime_error("Couldn't handshake userfaultfd api");
+    }
+  }
+
+  // Thread-safe
+  void checkFd() {
+    if (fd < 0) {
+      throw std::runtime_error("UFFD fd not initialized");
+    }
+  }
+
+  // Thread-safe
+  // Write-protect mode requires at least Linux 5.7 kernel
+  void register_address_range(size_t startPtr, size_t length, bool modeMissing,
+                              bool modeWriteProtect) {
+    checkFd();
+    uffdio_register r = {};
+    if (!(modeMissing || modeWriteProtect)) {
+      throw std::invalid_argument(
+          "UFFD register call must have at least one mode enabled");
+    }
+    if (modeMissing) {
+      r.mode |= UFFDIO_REGISTER_MODE_MISSING;
+    }
+    if (modeWriteProtect) {
+      if ((api.features & UFFD_FEATURE_PAGEFAULT_FLAG_WP) == 0) {
+        throw std::runtime_error("WriteProtect mode on UFFD not supported");
+      }
+      r.mode |= UFFDIO_REGISTER_MODE_WP;
+    }
+    r.range.start = startPtr;
+    r.range.len = length;
+    if (ioctl(fd, UFFDIO_REGISTER, &r) < 0) {
+      perror("UFFDIO_REGISTER error");
+      throw std::runtime_error("Couldn't register an address range with UFFD");
+    }
+  }
+
+  // Thread-safe
+  void unregister_address_range(size_t startPtr, size_t length) {
+    checkFd();
+    uffdio_range r = {};
+    r.start = startPtr;
+    r.len = length;
+    if (ioctl(fd, UFFDIO_UNREGISTER, &r) < 0) {
+      perror("UFFDIO_UNREGISTER error");
+      throw std::runtime_error(
+          "Couldn't unregister an address range from UFFD");
+    }
+  }
+
+  // Thread-safe
+  std::optional<uffd_msg> readEvent() {
+    checkFd();
+    uffd_msg ev;
+    int result = EAGAIN;
+    while (result == EAGAIN) {
+      int result = read(fd, (void *)&ev, sizeof(uffd_msg));
+      if (result < 0) {
+        result = errno;
+        if (result == EAGAIN) {
+          continue;
+        } else if (result == EWOULDBLOCK) {
+          return std::nullopt;
+        } else {
+          perror("read from UFFD error");
+          throw std::runtime_error("Error reading from the UFFD");
+        }
+      }
+    }
+    return ev;
+  }
+
+  // Thread-safe
+  void writeProtectPages(size_t startPtr, size_t length,
+                         bool preventWrites = true, bool dontWake = false) {
+    checkFd();
+    if ((api.features & UFFD_FEATURE_PAGEFAULT_FLAG_WP) == 0) {
+      throw std::runtime_error(
+          "Write-protect pages not supported by UFFD on this kernel version");
+    }
+    uffdio_writeprotect wp = {};
+    if (preventWrites) {
+      wp.mode |= UFFDIO_WRITEPROTECT_MODE_WP;
+    }
+    if (dontWake) {
+      wp.mode |= UFFDIO_WRITEPROTECT_MODE_DONTWAKE;
+    }
+    wp.range.start = startPtr;
+    wp.range.len = length;
+  retry:
+    if (ioctl(fd, UFFDIO_WRITEPROTECT, &wp) < 0) {
+      if (errno == EAGAIN) {
+        goto retry;
+      }
+      perror("UFFDIO_WRITEPROTECT error");
+      throw std::runtime_error(
+          "Couldn't write-protect-modify an address range through UFFD");
+    }
+  }
+
+  // Thread-safe
+  void zeroPages(size_t startPtr, size_t length, bool dontWake = false) {
+    checkFd();
+    uffdio_zeropage zp = {};
+    if (dontWake) {
+      zp.mode |= UFFDIO_ZEROPAGE_MODE_DONTWAKE;
+    }
+    zp.range.start = startPtr;
+    zp.range.len = length;
+  retry:
+    if (ioctl(fd, UFFDIO_ZEROPAGE, &zp) < 0) {
+      if (errno == EAGAIN) {
+        goto retry;
+      }
+      perror("UFFDIO_ZEROPAGE error");
+      throw std::runtime_error(
+          "Couldn't zero-page an address range through UFFD");
+    }
+  }
+
+  // Thread-safe
+  void copyPages(size_t targetStartPtr, size_t length, size_t sourceStartPtr,
+                 bool writeProtect = false, bool dontWake = false) {
+    checkFd();
+    uffdio_copy cp = {};
+    if (dontWake) {
+      cp.mode |= UFFDIO_COPY_MODE_DONTWAKE;
+    }
+    if (writeProtect) {
+      cp.mode |= UFFDIO_COPY_MODE_WP;
+    }
+    cp.src = sourceStartPtr;
+    cp.len = length;
+    cp.dst = targetStartPtr;
+  retry:
+    if (ioctl(fd, UFFDIO_COPY, &cp) < 0) {
+      if (errno == EAGAIN) {
+        goto retry;
+      }
+      perror("UFFDIO_COPY error");
+      throw std::runtime_error("Couldn't copy an address range through UFFD");
+    }
+  }
+
+  // Thread-safe
+  void wakePages(size_t startPtr, size_t length) {
+    checkFd();
+    uffdio_range wr = {};
+    wr.start = startPtr;
+    wr.len = length;
+  retry:
+    if (ioctl(fd, UFFDIO_WAKE, &wr) < 0) {
+      if (errno == EAGAIN) {
+        goto retry;
+      }
+      perror("UFFDIO_WAKE error");
+      throw std::runtime_error("Couldn't wake an address range through UFFD");
+    }
+  }
+};
 
 #define NOINLINE __attribute__((noinline))
 
