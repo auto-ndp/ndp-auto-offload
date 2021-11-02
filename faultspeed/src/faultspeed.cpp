@@ -430,7 +430,7 @@ struct UffdHandler {
     fprintf(stderr, "Starting UFFD handler\n");
     uffd.create(O_CLOEXEC);
     pageSize = sysconf(_SC_PAGESIZE);
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < (int)std::thread::hardware_concurrency(); i++) {
       std::thread([&]() { this->workerThread(); }).detach();
     }
   }
@@ -468,7 +468,7 @@ struct UffdHandler {
                   static_cast<unsigned long long>(address));
           std::terminate();
         }
-        const bool writePf = flags & UFFD_PAGEFAULT_FLAG_WRITE;
+        // const bool writePf = flags & UFFD_PAGEFAULT_FLAG_WRITE;
         const bool writeProtectionChangePf = flags & UFFD_PAGEFAULT_FLAG_WP;
         const bool inBounds = m.arg.pagefault.address < wmem_base + wmem->size;
         if (!inBounds) {
@@ -484,7 +484,7 @@ struct UffdHandler {
         }
         if (snapshot != nullptr && address < snapshot->size) {
           const size_t snapshot_base = size_t(snapshot->base);
-          uffd.copyPages(address, pageSize, snapshot_base, !writePf, false);
+          uffd.copyPages(address, pageSize, snapshot_base, false, false);
           // writePf -> dirty page
           continue;
         } else {
@@ -514,7 +514,7 @@ struct UffdHandler {
       throw std::runtime_error(
           "Couldn't unprotect memory range when enabling UFFD");
     }
-    uffd.register_address_range(addr, WMEM_SIZE, true, true);
+    uffd.register_address_range(addr, WMEM_SIZE, true, false);
   }
 
   void remove(WMemory &wmem) {
