@@ -622,13 +622,7 @@ const WMemory &getSnapshot() {
 }
 
 #define FAULTSPEED_COMMON_CONFIG                                               \
-  ->UseRealTime()                                                              \
-      ->Threads(1)                                                             \
-      ->Threads(8)                                                             \
-      ->Threads(16)                                                            \
-      ->Threads(24)                                                            \
-      ->Threads(32)                                                            \
-      ->Threads(64)
+  ->UseRealTime()->Threads(1)->Threads(8)->Threads(16)->Threads(24)->Threads(64)
 
 // Fastest possible way, no memory protection or touching bindings at all
 void BM_NoProtection(benchmark::State &state) {
@@ -858,6 +852,43 @@ void BM_UFFD_SIGBUS_Eager(benchmark::State &state) {
   uffdSigbusHandler().remove(func);
 }
 BENCHMARK(BM_UFFD_SIGBUS_Eager)
+FAULTSPEED_COMMON_CONFIG;
+
+// UFFD handler, filling the memory with snapshot data as-needed
+void BM_UFFD_SIGBUS_Lazy(benchmark::State &state) {
+  const WMemory &snapshot = getSnapshot();
+  WMemory func;
+  CpuTimes ct_pre;
+  if (state.thread_index() == 0) {
+    uffdSigbusHandler().setSnapshot(&snapshot);
+    uffdSigbusHandler().faults.store(0);
+    ct_pre = perf_cpu_times();
+  }
+  uffdSigbusHandler().add(func);
+  for (auto _ : state) {
+    func.resizeWavmUffd(0);
+    func.sideEffect();
+    func.resizeWavmUffd(SNAP_SIZE);
+    func.sideEffect();
+    func.fillWithData(WORK_FILL_START);
+    func.sideEffect();
+    func.resizeWavmUffd(WORK_SIZE);
+    func.sideEffect();
+    func.fillWithData(WORK_FILL_START);
+    func.sideEffect();
+    benchmark::DoNotOptimize(func);
+  }
+  if (state.thread_index() == 0) {
+    const CpuTimes ct_post = perf_cpu_times();
+    const float utilization = cpu_utilization(ct_pre, ct_post);
+    state.counters["UFFD_Faults"] = (uffdSigbusHandler().faults.load());
+    state.counters["CPU_Utilization"] = utilization;
+    state.counters["CPU_Utilization_per_thread"] =
+        utilization * std::thread::hardware_concurrency() / state.threads();
+  }
+  uffdSigbusHandler().remove(func);
+}
+BENCHMARK(BM_UFFD_SIGBUS_Lazy)
 FAULTSPEED_COMMON_CONFIG;
 
 BENCHMARK_MAIN();
