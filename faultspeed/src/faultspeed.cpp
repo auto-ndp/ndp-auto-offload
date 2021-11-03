@@ -63,7 +63,7 @@ struct UserfaultFd {
     return std::make_pair(oldFd, oldApi);
   }
 
-  void create(int flags = 0) {
+  void create(int flags = 0, bool sigbus = false) {
     clear();
     int result = syscall(SYS_userfaultfd, flags);
     if (result < 0) {
@@ -74,6 +74,9 @@ struct UserfaultFd {
     fd = result;
     api.api = UFFD_API;
     api.features = UFFD_FEATURE_THREAD_ID;
+    if (sigbus) {
+      api.features |= UFFD_FEATURE_SIGBUS;
+    }
     api.ioctls = 0;
     result = ioctl(fd, UFFDIO_API, &api);
     if (result < 0) {
@@ -418,21 +421,116 @@ struct WMemory {
   }
 };
 
+struct UffdHandler;
+static UffdHandler *lastUffdH;
+
 struct UffdHandler {
   UserfaultFd uffd;
+  int threadCount;
   size_t pageSize;
   std::shared_mutex mappingsMx;
   WMemory const *snapshot = nullptr;
   std::vector<std::pair<size_t, WMemory *>> mappings;
   std::atomic_uint64_t faults = 0;
 
-  UffdHandler() {
+  explicit UffdHandler(int threads) : threadCount(threads) {
     fprintf(stderr, "Starting UFFD handler\n");
     mappings.reserve(128);
-    uffd.create(O_CLOEXEC);
+    uffd.create(O_CLOEXEC, threads < 1);
     pageSize = sysconf(_SC_PAGESIZE);
-    for (int i = 0; i < (int)std::thread::hardware_concurrency() / 2; i++) {
+    for (int i = 0; i < threads; i++) {
       std::thread([&]() { this->workerThread(); }).detach();
+    }
+    lastUffdH = this;
+  }
+
+  void registerSigbusHandler() {
+    struct sigaction action;
+    action.sa_flags = SA_RESTART | SA_SIGINFO;
+    action.sa_handler = nullptr;
+    action.sa_sigaction = &sigbusHandler;
+    sigemptyset(&action.sa_mask);
+    lastUffdH = this;
+    int result = sigaction(SIGBUS, &action, nullptr);
+    if (result < 0) {
+      perror("Couldn't register SIGBUS handler");
+      throw std::runtime_error("Couldn't register SIGBUS handler");
+    }
+  }
+
+  // The SIGBUS can only occur when accessing WASM memory, so async-signal
+  // safety is not as important
+  static void sigbusHandler(int code, siginfo_t *siginfo, void *contextR) {
+    ucontext_t *context = (ucontext_t *)contextR;
+    if (code == SIGBUS) {
+      uffd_msg m = {};
+      m.event = UFFD_EVENT_PAGEFAULT;
+      m.arg.pagefault = {.flags = UFFD_PAGEFAULT_FLAG_WRITE,
+                         .address = (size_t)siginfo->si_addr,
+                         .feat = {.ptid = (unsigned)gettid()}};
+      lastUffdH->handleOne(m);
+    } else {
+      std::terminate();
+    }
+  }
+
+  void handleOne(uffd_msg m) {
+    if (m.event != UFFD_EVENT_PAGEFAULT) {
+      fprintf(stderr,
+              "Caught event of type %d which is not UFFD_EVENT_PAGEFAULT\n",
+              int(m.event));
+      std::terminate();
+    }
+    const uint32_t tid = m.arg.pagefault.feat.ptid;
+    const uint64_t flags = m.arg.pagefault.flags;
+    // align to page boundary
+    const uint64_t address = m.arg.pagefault.address & ~(pageSize - 1);
+    // fprintf(stderr, "PF %zx\n", size_t(address));
+    std::shared_lock<std::shared_mutex> lock(mappingsMx);
+    const auto it = std::ranges::find_if(
+        mappings,
+        [address](size_t base) {
+          return (address >= base) && (address < base + WMEM_SIZE);
+        },
+        [](const auto &p) { return p.first; });
+    if (it == mappings.end()) {
+      fprintf(stderr,
+              "[1] Couldn't find mapping corresponding to address %llu\n",
+              static_cast<unsigned long long>(address));
+      std::terminate();
+    }
+    const WMemory *wmem = it->second;
+    lock.unlock();
+    const size_t wmem_base = size_t(wmem->base);
+    if (address < wmem_base || address >= wmem_base + WMEM_SIZE) {
+      fprintf(stderr,
+              "[2] Couldn't find mapping corresponding to address %llu\n",
+              static_cast<unsigned long long>(address));
+      std::terminate();
+    }
+    // const bool writePf = flags & UFFD_PAGEFAULT_FLAG_WRITE;
+    const bool writeProtectionChangePf = flags & UFFD_PAGEFAULT_FLAG_WP;
+    const bool inBounds = m.arg.pagefault.address < wmem_base + wmem->size;
+    if (!inBounds) {
+      kill(tid, SIGSEGV);
+      uffd.wakePages(address, pageSize);
+      return;
+    }
+    faults.fetch_add(1, std::memory_order_acq_rel);
+    if (writeProtectionChangePf) {
+      // dirty page
+      uffd.writeProtectPages(address, pageSize, false, false);
+      return;
+    }
+    if (snapshot != nullptr && address < snapshot->size) {
+      const size_t snapshot_base = size_t(snapshot->base);
+      uffd.copyPages(address, pageSize, snapshot_base, false, false);
+      // writePf -> dirty page
+      return;
+    } else {
+      // dirty page
+      uffd.zeroPages(address, pageSize, false);
+      return;
     }
   }
 
@@ -440,63 +538,7 @@ struct UffdHandler {
     try {
       while (true) {
         uffd_msg m = uffd.readEvent().value();
-        if (m.event != UFFD_EVENT_PAGEFAULT) {
-          fprintf(stderr,
-                  "Caught event of type %d which is not UFFD_EVENT_PAGEFAULT\n",
-                  int(m.event));
-          std::terminate();
-        }
-        const uint32_t tid = m.arg.pagefault.feat.ptid;
-        const uint64_t flags = m.arg.pagefault.flags;
-        // align to page boundary
-        const uint64_t address = m.arg.pagefault.address & ~(pageSize - 1);
-        // fprintf(stderr, "PF %zx\n", size_t(address));
-        std::shared_lock<std::shared_mutex> lock(mappingsMx);
-        const auto it = std::ranges::find_if(
-            mappings,
-            [address](size_t base) {
-              return (address >= base) && (address < base + WMEM_SIZE);
-            },
-            [](const auto &p) { return p.first; });
-        if (it == mappings.end()) {
-          fprintf(stderr,
-                  "[1] Couldn't find mapping corresponding to address %llu\n",
-                  static_cast<unsigned long long>(address));
-          std::terminate();
-        }
-        const WMemory *wmem = it->second;
-        lock.unlock();
-        const size_t wmem_base = size_t(wmem->base);
-        if (address < wmem_base || address >= wmem_base + WMEM_SIZE) {
-          fprintf(stderr,
-                  "[2] Couldn't find mapping corresponding to address %llu\n",
-                  static_cast<unsigned long long>(address));
-          std::terminate();
-        }
-        // const bool writePf = flags & UFFD_PAGEFAULT_FLAG_WRITE;
-        const bool writeProtectionChangePf = flags & UFFD_PAGEFAULT_FLAG_WP;
-        const bool inBounds = m.arg.pagefault.address < wmem_base + wmem->size;
-        if (!inBounds) {
-          kill(tid, SIGSEGV);
-          uffd.wakePages(address, pageSize);
-          continue;
-        }
-        faults.fetch_add(1, std::memory_order_acq_rel);
-        if (writeProtectionChangePf) {
-          // dirty page
-          uffd.writeProtectPages(address, pageSize, false, false);
-          continue;
-        }
-        if (snapshot != nullptr && address < snapshot->size) {
-          const size_t snapshot_base = size_t(snapshot->base);
-          uffd.copyPages(address, pageSize, snapshot_base, false, false);
-          // writePf -> dirty page
-          continue;
-        } else {
-          // dirty page
-          uffd.zeroPages(address, pageSize, false);
-          continue;
-        }
+        handleOne(m);
       }
     } catch (std::exception &e) {
       fprintf(stderr, "Caught exception in UFFD worker thred: %s\n", e.what());
@@ -537,9 +579,32 @@ struct UffdHandler {
   }
 };
 
+std::mutex uffdHandlerMutex;
+
+std::unique_ptr<UffdHandler> &handlerPtrStorage() {
+  static std::unique_ptr<UffdHandler> uffdHandler{nullptr};
+  return uffdHandler;
+}
+
 UffdHandler &uffdHandler() {
-  static UffdHandler h{};
-  return h;
+  std::unique_lock<std::mutex> _l{uffdHandlerMutex};
+  auto &hps = handlerPtrStorage();
+  if (hps == nullptr || hps->threadCount < 1) {
+    hps = nullptr;
+    hps = std::make_unique<UffdHandler>(
+        (int)std::thread::hardware_concurrency() / 2);
+  }
+  return *hps;
+}
+
+UffdHandler &uffdSigbusHandler() {
+  std::unique_lock<std::mutex> _l{uffdHandlerMutex};
+  auto &hps = handlerPtrStorage();
+  if (hps == nullptr || hps->threadCount > 0) {
+    hps = nullptr;
+    hps = std::make_unique<UffdHandler>(-1);
+  }
+  return *hps;
 }
 
 static std::once_flag snapshotInitFlag;
@@ -757,6 +822,42 @@ void BM_UFFD_Lazy(benchmark::State &state) {
   uffdHandler().remove(func);
 }
 BENCHMARK(BM_UFFD_Lazy)
+FAULTSPEED_COMMON_CONFIG;
+
+// UFFD handler, pre-filling the memory with data proactively
+void BM_UFFD_SIGBUS_Eager(benchmark::State &state) {
+  const WMemory &snapshot = getSnapshot();
+  WMemory func;
+  CpuTimes ct_pre;
+  if (state.thread_index() == 0) {
+    uffdSigbusHandler().setSnapshot(nullptr); // use zero-page filling
+    uffdSigbusHandler().faults.store(0);
+    ct_pre = perf_cpu_times();
+  }
+  uffdSigbusHandler().add(func);
+  uffdSigbusHandler().registerSigbusHandler();
+  for (auto _ : state) {
+    func.restoreFromUffd(snapshot);
+    func.sideEffect();
+    func.fillWithData(WORK_FILL_START);
+    func.sideEffect();
+    func.resizeWavmUffd(WORK_SIZE);
+    func.sideEffect();
+    func.fillWithData(WORK_FILL_START);
+    func.sideEffect();
+    benchmark::DoNotOptimize(func);
+  }
+  if (state.thread_index() == 0) {
+    const CpuTimes ct_post = perf_cpu_times();
+    const float utilization = cpu_utilization(ct_pre, ct_post);
+    state.counters["UFFD_Faults"] = (uffdSigbusHandler().faults.load());
+    state.counters["CPU_Utilization"] = utilization;
+    state.counters["CPU_Utilization_per_thread"] =
+        utilization * std::thread::hardware_concurrency() / state.threads();
+  }
+  uffdSigbusHandler().remove(func);
+}
+BENCHMARK(BM_UFFD_SIGBUS_Eager)
 FAULTSPEED_COMMON_CONFIG;
 
 BENCHMARK_MAIN();
