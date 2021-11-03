@@ -423,14 +423,15 @@ struct UffdHandler {
   size_t pageSize;
   std::shared_mutex mappingsMx;
   WMemory const *snapshot = nullptr;
-  std::map<size_t, WMemory *> mappings;
+  std::vector<std::pair<size_t, WMemory *>> mappings;
   std::atomic_uint64_t faults = 0;
 
   UffdHandler() {
     fprintf(stderr, "Starting UFFD handler\n");
+    mappings.reserve(128);
     uffd.create(O_CLOEXEC);
     pageSize = sysconf(_SC_PAGESIZE);
-    for (int i = 0; i < (int)std::thread::hardware_concurrency(); i++) {
+    for (int i = 0; i < (int)std::thread::hardware_concurrency() / 2; i++) {
       std::thread([&]() { this->workerThread(); }).detach();
     }
   }
@@ -451,7 +452,12 @@ struct UffdHandler {
         const uint64_t address = m.arg.pagefault.address & ~(pageSize - 1);
         // fprintf(stderr, "PF %zx\n", size_t(address));
         std::shared_lock<std::shared_mutex> lock(mappingsMx);
-        const auto it = mappings.lower_bound(address - WMEM_SIZE + 1);
+        const auto it = std::ranges::find_if(
+            mappings,
+            [address](size_t base) {
+              return (address >= base) && (address < base + WMEM_SIZE);
+            },
+            [](const auto &p) { return p.first; });
         if (it == mappings.end()) {
           fprintf(stderr,
                   "[1] Couldn't find mapping corresponding to address %llu\n",
@@ -506,7 +512,7 @@ struct UffdHandler {
     size_t addr = size_t(wmem.base);
     {
       std::unique_lock<std::shared_mutex> _l(mappingsMx);
-      mappings[addr] = &wmem;
+      mappings.push_back(std::make_pair(addr, &wmem));
     }
     if (mprotect(wmem.base, WMEM_SIZE / 2, PROT_READ | PROT_WRITE) < 0) {
       perror("Mprotect error when adding UFFD range");
@@ -521,7 +527,12 @@ struct UffdHandler {
     uffd.unregister_address_range(addr, WMEM_SIZE);
     {
       std::unique_lock<std::shared_mutex> _l(mappingsMx);
-      mappings.erase(addr);
+      auto it =
+          std::ranges::find(mappings, addr, [](auto &p) { return p.first; });
+      if (it == mappings.end()) {
+        throw std::runtime_error("WMemory already missing from UFFD");
+      }
+      mappings.erase(it);
     }
   }
 };
@@ -701,8 +712,7 @@ void BM_UFFD_Eager(benchmark::State &state) {
   if (state.thread_index() == 0) {
     const CpuTimes ct_post = perf_cpu_times();
     const float utilization = cpu_utilization(ct_pre, ct_post);
-    state.counters["UFFD_Faults"] =
-        benchmark::Counter(uffdHandler().faults.load() / state.iterations());
+    state.counters["UFFD_Faults"] = (uffdHandler().faults.load());
     state.counters["CPU_Utilization"] = utilization;
     state.counters["CPU_Utilization_per_thread"] =
         utilization * std::thread::hardware_concurrency() / state.threads();
@@ -739,8 +749,7 @@ void BM_UFFD_Lazy(benchmark::State &state) {
   if (state.thread_index() == 0) {
     const CpuTimes ct_post = perf_cpu_times();
     const float utilization = cpu_utilization(ct_pre, ct_post);
-    state.counters["UFFD_Faults"] =
-        benchmark::Counter(uffdHandler().faults.load() / state.iterations());
+    state.counters["UFFD_Faults"] = (uffdHandler().faults.load());
     state.counters["CPU_Utilization"] = utilization;
     state.counters["CPU_Utilization_per_thread"] =
         utilization * std::thread::hardware_concurrency() / state.threads();
