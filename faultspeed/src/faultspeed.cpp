@@ -437,7 +437,6 @@ struct UffdHandler {
 
   void workerThread() {
     try {
-      fprintf(stderr, "UFFD Worker start\n");
       while (true) {
         uffd_msg m = uffd.readEvent().value();
         if (m.event != UFFD_EVENT_PAGEFAULT) {
@@ -702,7 +701,8 @@ void BM_UFFD_Eager(benchmark::State &state) {
   if (state.thread_index() == 0) {
     const CpuTimes ct_post = perf_cpu_times();
     const float utilization = cpu_utilization(ct_pre, ct_post);
-    state.counters["UFFD_Faults"] = uffdHandler().faults.load();
+    state.counters["UFFD_Faults"] =
+        benchmark::Counter(uffdHandler().faults.load() / state.iterations());
     state.counters["CPU_Utilization"] = utilization;
     state.counters["CPU_Utilization_per_thread"] =
         utilization * std::thread::hardware_concurrency() / state.threads();
@@ -739,7 +739,8 @@ void BM_UFFD_Lazy(benchmark::State &state) {
   if (state.thread_index() == 0) {
     const CpuTimes ct_post = perf_cpu_times();
     const float utilization = cpu_utilization(ct_pre, ct_post);
-    state.counters["UFFD_Faults"] = uffdHandler().faults.load();
+    state.counters["UFFD_Faults"] =
+        benchmark::Counter(uffdHandler().faults.load() / state.iterations());
     state.counters["CPU_Utilization"] = utilization;
     state.counters["CPU_Utilization_per_thread"] =
         utilization * std::thread::hardware_concurrency() / state.threads();
