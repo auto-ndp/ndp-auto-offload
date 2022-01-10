@@ -38,7 +38,7 @@ usms <- 1.0/1000.0
 uss <- usms/1000.0
 
 paper_plot_w <- 4
-paper_plot_h <- 2.5
+paper_plot_h <- 2.25
 paper_font <- "serif"
 paper_pointsize <- 10
 paper_theme <- theme_minimal() +
