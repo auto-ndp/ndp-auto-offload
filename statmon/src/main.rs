@@ -1,10 +1,14 @@
 use anyhow::Result;
 use argh::FromArgs;
-use parking_lot::lock_api::RawMutex;
-use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use parking_lot::Mutex;
+use std::{sync::Arc, time::Duration};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    time::MissedTickBehavior,
+};
 
 mod cpustat;
+mod iostat;
 mod stats;
 use crate::stats::Stats;
 
@@ -22,10 +26,7 @@ struct Options {
     netdev: String,
 }
 
-static STATS: parking_lot::Mutex<Stats> =
-    parking_lot::Mutex::const_new(parking_lot::RawMutex::INIT, Stats::new());
-
-async fn conn_handler(mut conn: tokio::net::TcpStream) -> Result<()> {
+async fn conn_handler(mut conn: tokio::net::TcpStream, stats: Arc<Mutex<Stats>>) -> Result<()> {
     conn.set_nodelay(true)?;
     let (rc, mut wc) = conn.split();
     let mut rc = tokio::io::BufReader::new(rc);
@@ -36,13 +37,13 @@ async fn conn_handler(mut conn: tokio::net::TcpStream) -> Result<()> {
             b'\n' | b'\r' | b'\0' => continue,
             b'q' => break,
             b'[' => {
-                let mut st = STATS.lock();
+                let mut st = stats.lock();
                 st.update()?;
                 st.begin_range();
             }
             b']' => {
                 let stats = {
-                    let mut st = STATS.lock();
+                    let mut st = stats.lock();
                     st.update()?;
                     st.end_range();
                     st.stat_packet()
@@ -50,7 +51,7 @@ async fn conn_handler(mut conn: tokio::net::TcpStream) -> Result<()> {
                 wc.write_all(stats.as_bytes()).await?;
             }
             b'?' => {
-                let stats = STATS.lock().stat_packet();
+                let stats = stats.lock().stat_packet();
                 wc.write_all(stats.as_bytes()).await?;
             }
             u => eprintln!("Warning: {}", anyhow::anyhow!("Unknown command byte {}", u)),
@@ -61,8 +62,9 @@ async fn conn_handler(mut conn: tokio::net::TcpStream) -> Result<()> {
 }
 
 async fn async_main(opts: &'static Options) -> Result<()> {
+    let mut stats = Mutex::new(Stats::new());
     {
-        let mut stats = STATS.lock();
+        let mut stats = stats.get_mut();
         stats.host_prefix = opts.host_prefix.clone();
         stats.net_iface = opts.netdev.clone();
         stats.update()?;
@@ -73,22 +75,26 @@ async fn async_main(opts: &'static Options) -> Result<()> {
         opts.port,
     ))
     .await?;
+    let stats = Arc::new(stats);
+    let int_stats = Arc::clone(&stats);
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_millis(500));
+        interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        loop {
+            interval.tick().await;
+            if let Err(e) = int_stats.lock().update() {
+                eprintln!("Couldn't update statistics: {}", e);
+                panic!("{}", e);
+            }
+        }
+    });
     eprintln!("[status] Listening on port {}", opts.port);
     loop {
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_millis(250));
-            loop {
-                interval.tick().await;
-                if let Err(e) = STATS.lock().update() {
-                    eprintln!("Couldn't update statistics: {}", e);
-                    panic!("{}", e);
-                }
-            }
-        });
         match sock.accept().await {
             Ok((conn, addr)) => {
+                let conn_stats = Arc::clone(&stats);
                 tokio::spawn(async move {
-                    if let Err(e) = conn_handler(conn).await {
+                    if let Err(e) = conn_handler(conn, conn_stats).await {
                         eprintln!("Error handling connection from {}: {}", addr, e);
                     }
                 });

@@ -6,6 +6,7 @@ use std::io::{prelude::*, SeekFrom};
 use std::os::unix::io::AsRawFd;
 
 use crate::cpustat::{CpuStat, CpuTotals};
+use crate::iostat::{IoStat, IoTotals};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum StatValue {
@@ -112,6 +113,14 @@ pub enum WhichStat {
     NetRxErrors,
     NetTxBytes,
     NetTxErrors,
+    IoReadsCompleted,
+    IoReadsMerged,
+    IoSectorsRead,
+    IoMsReading,
+    IoWritesCompleted,
+    IoWritesMerged,
+    IoSectorsWritten,
+    IoMsWriting,
     //
     TotalStatCount,
 }
@@ -190,6 +199,14 @@ const STATS_INIT: [Stat; WhichStat::TotalStatCount as usize] = [
     Stat::int("net_rx_errors"),
     Stat::int("net_tx_bytes"),
     Stat::int("net_tx_errors"),
+    Stat::int("io_reads_completed"),
+    Stat::int("io_reads_merged"),
+    Stat::int("io_sectors_read"),
+    Stat::int("io_ms_reading"),
+    Stat::int("io_writes_completed"),
+    Stat::int("io_writes_merged"),
+    Stat::int("io_sectors_written"),
+    Stat::int("io_ms_writing"),
 ];
 
 pub struct Stats {
@@ -207,10 +224,11 @@ pub struct Stats {
     net_rxe_ref: i64,
     net_tx_ref: i64,
     net_txe_ref: i64,
+    io: IoStat,
 }
 
 impl Stats {
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             in_range: false,
             host_prefix: String::new(),
@@ -226,6 +244,7 @@ impl Stats {
             net_rxe_ref: 0,
             net_tx_ref: 0,
             net_txe_ref: 0,
+            io: IoStat::new(),
         }
     }
 
@@ -302,6 +321,34 @@ impl Stats {
             self.stats[WhichStat::ProcsBlocked as usize]
                 .value_now
                 .seti(self.cpu.procs_io_blocked() as i64);
+        }
+        self.io.update(&mut self.rdbuf)?;
+        {
+            let io = self.io.io_totals_ms();
+            self.stats[WhichStat::IoReadsCompleted as usize]
+                .value_now
+                .seti(io[IoTotals::ReadsCompleted as usize] as i64);
+            self.stats[WhichStat::IoReadsMerged as usize]
+                .value_now
+                .seti(io[IoTotals::ReadsMerged as usize] as i64);
+            self.stats[WhichStat::IoSectorsRead as usize]
+                .value_now
+                .seti(io[IoTotals::SectorsRead as usize] as i64);
+            self.stats[WhichStat::IoMsReading as usize]
+                .value_now
+                .seti(io[IoTotals::MsReading as usize] as i64);
+            self.stats[WhichStat::IoWritesCompleted as usize]
+                .value_now
+                .seti(io[IoTotals::WritesCompleted as usize] as i64);
+            self.stats[WhichStat::IoWritesMerged as usize]
+                .value_now
+                .seti(io[IoTotals::WritesMerged as usize] as i64);
+            self.stats[WhichStat::IoSectorsWritten as usize]
+                .value_now
+                .seti(io[IoTotals::SectorsWritten as usize] as i64);
+            self.stats[WhichStat::IoMsWriting as usize]
+                .value_now
+                .seti(io[IoTotals::MsWriting as usize] as i64);
         }
         if self.in_range {
             self.stats.iter_mut().for_each(Stat::update_aggregate);
