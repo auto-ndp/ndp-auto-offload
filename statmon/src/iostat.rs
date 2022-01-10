@@ -46,6 +46,7 @@ impl IoStat {
         rdbuf.clear();
         fp.read_to_string(rdbuf)?;
         fp.seek(SeekFrom::Start(0))?;
+        let is_first = self.io_totals[0] == 0;
         for line in rdbuf.lines().map(str::trim).filter(|l| !l.is_empty()) {
             let mut splitter = line.split_ascii_whitespace();
             let _ = splitter.next(); // id 1
@@ -54,7 +55,7 @@ impl IoStat {
             if devname.is_empty() || self.ignore_set.is_match(devname) {
                 continue;
             }
-            if self.io_totals[0] == 0 {
+            if is_first {
                 eprintln!("Detected disk: {}", devname);
             }
             for (val, field) in splitter.zip(self.io_totals.iter_mut()) {
