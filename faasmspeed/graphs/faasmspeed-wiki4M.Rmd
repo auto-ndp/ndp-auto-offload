@@ -25,7 +25,7 @@ t_data <- raw_csv %>%
     opts_host = factor(opts_host),
     opts_user = factor(opts_user),
     opts_function = factor(opts_function),
-    opts_ndp = factor(opts_ndp, levels = c(0, 0.25, 0.5, 0.75, 1, 1.25), labels = c("0%", "25%", "50%", "75%", "100%", "AoS")),
+    opts_ndp = factor(opts_ndp, levels = c(0, 0.17, 0.33, 0.50, 0.67, 0.83, 1.0, 1.25), labels = c("0%", "1/6", "1/3", "1/2", "2/3", "5/6", "100%", "AoS")),
     total_requests = (errors_count + results_count),
     error_rate = errors_count / (errors_count + results_count),
     # Work around bad outlier removal, use q3+1.5*IQR as an estimate of max non-outlier value
@@ -60,7 +60,7 @@ paper_plot_path <- paste0('plots/', function_name, '_')
 ```{r latency_rps_median}
 # ymin = latency_us_q1*plot_scale, , ymax = latency_us_q3*plot_scale
 gplt <- ggplot(t_data %>% filter(rps_offset < 0.05),
-    aes(x = opts_req_rps, group = opts_ndp, color = opts_ndp)) +
+    aes(x = avg_rps_avg_rps, group = opts_ndp, color = opts_ndp)) +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
   geom_line(aes(y = latency_us_med*uss)) +
   geom_point(aes(y = latency_us_med*uss, shape = opts_ndp)) +
@@ -215,8 +215,9 @@ ggplot(t_data) +
 
 ```{r plot_faasm_load}
 ggplot(t_data) +
-  geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_computefaasm_started_avg, group = interaction(opts_function,opts_ndp), color = interaction('compute',opts_function,opts_ndp))) +
-  geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_storagefaasm_started_avg, group = interaction(opts_function,opts_ndp), color = interaction('storage',opts_function,opts_ndp))) +
+  paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
+  geom_line(stat = 'identity', aes(linetype="Compute", x = opts_req_rps, y = monitor_computefaasm_started_avg, group = interaction(opts_function,opts_ndp), color = interaction(opts_function,opts_ndp))) +
+  geom_line(stat = 'identity', aes(linetype="Storage", x = opts_req_rps, y = monitor_storagefaasm_started_avg, group = interaction(opts_function,opts_ndp), color = interaction(opts_function,opts_ndp))) +
   scale_x_continuous(trans = 'identity', breaks = breaks_pretty(n=20), label = scales::label_comma(accuracy = 1)) +
   scale_y_continuous(trans = 'identity', breaks = breaks_pretty(n=12)) +
   labs(title = "Average started faasm tasks") +
@@ -225,8 +226,9 @@ ggplot(t_data) +
 
 ```{r plot_faasm_load2}
 ggplot(t_data) +
-  geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_computefaasm_waiting_queued_avg, group = interaction(opts_function,opts_ndp), color = interaction('compute',opts_function,opts_ndp))) +
-  geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_storagefaasm_waiting_queued_avg, group = interaction(opts_function,opts_ndp), color = interaction('storage',opts_function,opts_ndp))) +
+  paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
+  geom_line(stat = 'identity', aes(linetype="Compute", x = opts_req_rps, y = monitor_computefaasm_waiting_queued_avg, group = interaction(opts_function,opts_ndp), color = interaction(opts_function,opts_ndp))) +
+  geom_line(stat = 'identity', aes(linetype="Storage", x = opts_req_rps, y = monitor_storagefaasm_waiting_queued_avg, group = interaction(opts_function,opts_ndp), color = interaction(opts_function,opts_ndp))) +
   scale_x_continuous(trans = 'identity', breaks = breaks_pretty(n=20), label = scales::label_comma(accuracy = 1)) +
   scale_y_continuous(trans = 'identity', breaks = breaks_pretty(n=12)) +
   labs(title = "Average queued-waiting faasm tasks") +
