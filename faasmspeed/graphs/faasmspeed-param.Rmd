@@ -360,9 +360,6 @@ ggplot(t_data) +
   xlab("Req/s") + ylab("bytes/second")
 ```
 
-### IO
-
-
 ### RPS/RPS cross-verification
 ```{r plot_xverify_rps}
 ggplot(t_data) +
