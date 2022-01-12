@@ -60,6 +60,8 @@ paper_shape_scale <- scale_shape_manual(values = c(0,1,2,3,4,5,6,14))
 paper_plot_path <- paste0('plots/', function_name, '_')
 ```
 
+# Function = `r function_name`
+
 ## Latencies
 
 ### Latency median(rps)
@@ -129,7 +131,7 @@ dev.off()
 gplt
 ```
 
-### Error rate
+## Error rate
 
 ```{r plot_error_rate}
 gplt <- ggplot(t_data, aes(x = opts_req_rps, y = error_rate * 100.0, group = opts_ndp, color = opts_ndp)) +
@@ -145,10 +147,10 @@ dev.off()
 gplt
 ```
 
-### Network requests
+## Total bytes transferred over the network per request
 
 ```{r table_network}
-net_table <- t_data %>% filter(opts_req_rps <= 150) %>%
+net_table <- t_data %>%
   group_by(opts_ndp) %>%
   summarise(mean = mean((monitor_computenet_tx_bytes_sum + monitor_storagenet_tx_bytes_sum) / results_count))
 net_table <- column_to_rownames(net_table, var="opts_ndp")
@@ -163,9 +165,9 @@ ggplot(t_data) +
   xlab("Req/s") + ylab("bytes/request")
 ```
 
-### CPU analysis
+## CPU analysis
 
-#### Per-node System+User MS / Total MS
+### Per-node System+User MS / Total MS
 ```{r cpums_load}
 gplt <- ggplot(t_data %>% filter(rps_offset < 0.05),
     aes(x = opts_req_rps, group = opts_ndp, color = opts_ndp)) +
@@ -186,7 +188,7 @@ dev.off()
 gplt
 ```
 
-#### Cluster-total System+User MS / Total MS
+### Cluster-total System+User MS / Total MS
 ```{r total_utilization}
 gplt <- ggplot(t_data %>% filter(rps_offset < 0.05),
     aes(x = opts_req_rps, group = opts_ndp, color = opts_ndp)) +
@@ -204,7 +206,7 @@ dev.off()
 gplt
 ```
 
-#### Kernel average RUNNING threads
+### Kernel average RUNNING threads
 ```{r plot_cpu_load}
 ggplot(t_data) +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
@@ -216,7 +218,7 @@ ggplot(t_data) +
   xlab("Req/s") + ylab("count")
 ```
 
-#### Faasm average started tasks
+### Faasm average started tasks
 ```{r plot_faasm_load}
 ggplot(t_data) +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
@@ -228,7 +230,7 @@ ggplot(t_data) +
   xlab("Req/s") + ylab("count")
 ```
 
-#### Faasm average queued-waiting tasks
+### Faasm average queued-waiting tasks
 ```{r plot_faasm_load2}
 ggplot(t_data) +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
@@ -240,9 +242,9 @@ ggplot(t_data) +
   xlab("Req/s") + ylab("count")
 ```
 
-#### Context-switches per second
+### Context-switches per second
 ```{r plot_cpu_cswitches}
-ggplot(t_data %>% filter(opts_req_rps>50)) +
+ggplot(t_data) +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_computecswitches_sum / (opts_req_time), group = opts_ndp, color = opts_ndp, linetype = 'Compute')) +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_storagecswitches_sum / (opts_req_time), group = opts_ndp, color = opts_ndp, linetype = 'Storage')) +
@@ -252,9 +254,9 @@ ggplot(t_data %>% filter(opts_req_rps>50)) +
   xlab("Req/s") + ylab("count/req")
 ```
 
-#### Context-switches per request
+### Context-switches per request
 ```{r plot_cpu_cswitches_req}
-ggplot(t_data %>% filter(opts_req_rps>50)) +
+ggplot(t_data) +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_computecswitches_sum / (total_requests), group = opts_ndp, color = opts_ndp, linetype = 'Compute')) +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_storagecswitches_sum / (total_requests), group = opts_ndp, color = opts_ndp, linetype = 'Storage')) +
@@ -264,9 +266,9 @@ ggplot(t_data %>% filter(opts_req_rps>50)) +
   xlab("Req/s") + ylab("count/request")
 ```
 
-#### Linux load 1m-exp rolling average
+### Linux load 1m-exp rolling average
 ```{r plot_load_req}
-ggplot(t_data %>% filter(opts_req_rps>30)) +
+ggplot(t_data) +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_computeload_avg1_avg, group = opts_ndp, color = opts_ndp, linetype = 'Compute')) +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = monitor_storageload_avg1_avg, group = opts_ndp, color = opts_ndp, linetype = 'Storage')) +
@@ -276,9 +278,9 @@ ggplot(t_data %>% filter(opts_req_rps>30)) +
   xlab("Req/s") + ylab("1m average load")
 ```
 
-#### Per-node User+system CPU ms per request
+### Per-node User+system CPU ms per request
 ```{r plot_cpu_ms_pr}
-ggplot(t_data %>% filter(opts_req_rps>30)) +
+ggplot(t_data) +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = (monitor_computecpums_user_sum + monitor_computecpums_system_sum + monitor_computecpums_nice_sum) / (results_count), group = opts_ndp, color = opts_ndp, linetype = 'Compute')) +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = (monitor_storagecpums_user_sum + monitor_storagecpums_system_sum + monitor_storagecpums_nice_sum) / (results_count), group = opts_ndp, color = opts_ndp, linetype = 'Storage')) +
@@ -288,9 +290,9 @@ ggplot(t_data %>% filter(opts_req_rps>30)) +
   xlab("Req/s") + ylab("count")
 ```
 
-#### Cluster-total User+system CPU ms per request
+### Cluster-total User+system CPU ms per request
 ```{r plot_cpu_ms_pr_ct}
-ggplot(t_data %>% filter(opts_req_rps>30)) +
+ggplot(t_data) +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
   geom_line(stat = 'identity', aes(x = opts_req_rps, y = (monitor_computecpums_user_sum + monitor_computecpums_system_sum + monitor_computecpums_nice_sum + monitor_storagecpums_user_sum + monitor_storagecpums_system_sum + monitor_storagecpums_nice_sum) / (results_count), group = opts_ndp, color = opts_ndp)) +
   scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
@@ -299,9 +301,9 @@ ggplot(t_data %>% filter(opts_req_rps>30)) +
   xlab("Req/s") + ylab("count")
 ```
 
-### Memory statistics
+## Memory statistics
 
-#### Average active memory
+### Average active memory
 ```{r plot_mem_active_c}
 cmembase <- as.double(min(t_data$monitor_computemem_active_min))
 ggplot(t_data) +
@@ -324,9 +326,9 @@ ggplot(t_data) +
   xlab("Req/s") + ylab("bytes")
 ```
 
-### Network
+## Network
 
-#### Per-node TX bytes per request
+### Per-node TX bytes per request
 ```{r plot_net_tx_bytes}
 ggplot(t_data) +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
@@ -338,7 +340,7 @@ ggplot(t_data) +
   xlab("Req/s") + ylab("bytes/request")
 ```
 
-#### Cluster TX per request
+### Cluster TX per request
 ```{r plot_net_tx_sum_bytes}
 ggplot(t_data) +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
@@ -349,7 +351,7 @@ ggplot(t_data) +
   xlab("Req/s") + ylab("bytes/request")
 ```
 
-#### Cluster TX per second
+### Cluster TX per second
 ```{r plot_net_tx_sum_bytes_per_sec}
 ggplot(t_data) +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
@@ -359,6 +361,8 @@ ggplot(t_data) +
   labs(title = "Total bytes per second sent over network") +
   xlab("Req/s") + ylab("bytes/second")
 ```
+
+## Cross-verification
 
 ### RPS/RPS cross-verification
 ```{r plot_xverify_rps}
