@@ -9,7 +9,7 @@ echo Writing results to $OUTFILE
 printf "" > $OUTFILE
 
 FS_ARGS="thumbnailer_decode ${DATASET}"
-RPS_LIST="$(seq 10 10 90) $(seq 100 25 500) $(seq 600 100 2000)"
+RPS_LIST="$(seq 10 10 90) $(seq 100 25 500) $(seq 600 100 2000) $(seq 2200 200 3000)"
 NDP_LIST="0 3 4 6 8 9 12"
 TIME_PER=10
 FAASMSPEED=faasmspeed
