@@ -207,14 +207,13 @@ async fn run_function(
         } else {
             60.min(bytes.len())
         };
-        let first_bytes = String::from_utf8_lossy(&bytes[0..bytecount])
-            .replace('\n', "\\\\")
-            .replace(|c: char| !c.is_ascii_graphic(), "?");
+        let first_bytes = String::from_utf8_lossy(&bytes[0..bytecount]);
+        let first_bytes = first_bytes.escape_default();
         eprintln!(
             "[status][{function}] Test request success status {} after {:.3} ms, first {} bytes of content: {}",
             status.as_str(),
             duration.as_micros() as f64 / 1000.0,
-            first_bytes.len(),
+            bytecount,
             first_bytes,
         );
     }
