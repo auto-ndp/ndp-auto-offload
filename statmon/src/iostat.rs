@@ -26,7 +26,7 @@ pub struct IoStat {
 impl IoStat {
     pub fn new() -> Self {
         let ignore_set =
-            RegexSet::new(&[r"^loop", r"^sd[a-z]\d+", r"^nvme\d+n\d+p", r"^md\d+"]).unwrap();
+            RegexSet::new(&[r"^loop", r"^sd[a-z]\d+", r"^nvme\d+n\d+p"]).unwrap();
 
         Self {
             fp: None,
@@ -90,5 +90,5 @@ pub fn io_ignore_set_test() {
     assert!(!ignore_set.is_match("sda"));
     assert!(ignore_set.is_match("nvme0n0p0"));
     assert!(!ignore_set.is_match("nvme0n0"));
-    assert!(ignore_set.is_match("md100"));
+    assert!(!ignore_set.is_match("md100"));
 }
