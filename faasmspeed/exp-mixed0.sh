@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/zsh
 
 seq --format='wiki4m/frag_%06.0f' 0 20274 > /tmp/wc_dataset
 WC_DATASET="@/tmp/wc_dataset"
