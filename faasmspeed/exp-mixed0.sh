@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/bin/bash
 
 seq --format='wiki4m/frag_%06.0f' 0 20274 > /tmp/wc_dataset
 WC_DATASET="@/tmp/wc_dataset"
@@ -25,7 +25,7 @@ echo Writing results to $OUTFILE
 printf "" > $OUTFILE
 
 FS_ARGS="-f wordcount -f substr -f thumbnailer_decode -f pcakmm -f simple_get ${WC_DATASET} ${SUB_DATASET} ${PNG_DATASET} ${PCA_DATASET} ${GET_DATASET}"
-RPS_LIST="0.05\n$(seq 0.1 0.1 4)"
+RPS_LIST="0.05 $(seq 0.1 0.1 4)"
 NDP_LIST="0:0:0:0:0 6:9:0:6:0 12:12:12:12:0 12:0:12:12:0"
 TIME_PER=20
 FAASMSPEED=faasmspeed
@@ -43,7 +43,7 @@ NDPA=$(echo $NDP | tr ':' ' ')
 
 for RPS in ${RPS_LIST}
 do
-    RPSA="-r $((RPS*19)) -r $((RPS*140)) -r $((RPS*187)) -r $((RPS*1)) -r 10"
+    RPSA="-r $(bc <<< $RPS*19) -r $(bc <<< $RPS*140) -r $(bc <<< $RPS*187) -r $(bc <<< $RPS*1) -r 10"
     echo "*** Mixed NDP=${NDP} RPS=${RPSA}"
     # Warm-up burst
     ${FAASMSPEED} -h ${HOST} -u ndp ${NDPA} -N 12 ${FS_ARGS} -c -x ${TIMEOUT} -t 180000 ${RPSA} -p ${PARALLELISM} -o > /dev/null 2>&1
