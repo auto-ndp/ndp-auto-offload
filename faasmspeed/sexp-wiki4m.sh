@@ -1,15 +1,16 @@
 #!/bin/sh
 
-DATASET=$(seq --format='wiki4m/frag_%06.0f' 0 20274)
+seq --format='wiki4m/frag_%06.0f' 0 20274 > /tmp/wc_dataset
+DATASET="@/tmp/wc_dataset"
 
-OUTFILE=sresults-wiki4m-$(date -I).log
+OUTFILE=sresults-wc4m-$(date -I).log
 
 echo Writing results to $OUTFILE
 printf "" > $OUTFILE
 
 FS_ARGS="wordcount ${DATASET}"
 RPS_LIST="$(seq 10 10 90) $(seq 100 25 750)"
-NDP_LIST="5"
+NDP_LIST="24"
 TIME_PER=10
 FAASMSPEED=faasmspeed
 PARALLELISM=2
@@ -26,11 +27,11 @@ for RPS in ${RPS_LIST}
 do
     echo "*** Wordcount NDP=${NDP} RPS=${RPS}"
     # Warm-up burst
-    ${FAASMSPEED} -h ${HOST} -u ndp -n ${NDP} -N 4 -f ${FS_ARGS} -c -x ${TIMEOUT} -t 180000 -r ${RPS} -p ${PARALLELISM} -o > /dev/null 2>&1
-    ${FAASMSPEED} -h ${HOST} -u ndp -n ${NDP} -N 4 -f ${FS_ARGS} -c -x ${TIMEOUT} -t ${WARMUP_TIME} -r ${RPS} -p ${PARALLELISM} > /dev/null 2>&1
-    ${FAASMSPEED} -h ${HOST} -u ndp -n ${NDP} -N 4 -f ${FS_ARGS} -c -x ${TIMEOUT} -t ${WARMUP_TIME} -r ${RPS} -p ${PARALLELISM} -o > /dev/null 2>&1
+    ${FAASMSPEED} -h ${HOST} -u ndp -n ${NDP} -N 12 -f ${FS_ARGS} -c -x ${TIMEOUT} -t 180000 -r ${RPS} -p ${PARALLELISM} -o > /dev/null 2>&1
+    ${FAASMSPEED} -h ${HOST} -u ndp -n ${NDP} -N 12 -f ${FS_ARGS} -c -x ${TIMEOUT} -t ${WARMUP_TIME} -r ${RPS} -p ${PARALLELISM} > /dev/null 2>&1
+    ${FAASMSPEED} -h ${HOST} -u ndp -n ${NDP} -N 12 -f ${FS_ARGS} -c -x ${TIMEOUT} -t ${WARMUP_TIME} -r ${RPS} -p ${PARALLELISM} -o > /dev/null 2>&1
     sleep 1
-    ${FAASMSPEED} -h ${HOST} -u ndp -n ${NDP} -N 4 -f ${FS_ARGS} -c -m ${MONITOR_HOSTS} -x ${TIMEOUT} -t ${TIME_PER} -r ${RPS} -p ${PARALLELISM} >> $OUTFILE
+    ${FAASMSPEED} -h ${HOST} -u ndp -n ${NDP} -N 12 -f ${FS_ARGS} -c -m ${MONITOR_HOSTS} -x ${TIMEOUT} -t ${TIME_PER} -r ${RPS} -p ${PARALLELISM} >> $OUTFILE
 done
 sleep 60
 

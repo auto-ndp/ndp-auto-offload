@@ -10,7 +10,7 @@ printf "" > $OUTFILE
 
 FS_ARGS="pcakmm ${DATASET}"
 RPS_LIST="$(seq 0.4 0.2 10) $(seq 11 1 30)"
-NDP_LIST="5"
+NDP_LIST=24
 TIME_PER=20
 FAASMSPEED=faasmspeed
 PARALLELISM=4
@@ -25,13 +25,13 @@ do
 
 for RPS in ${RPS_LIST}
 do
-    echo "*** Thumb_decode NDP=${NDP} RPS=${RPS}"
+    echo "*** PCAKMM NDP=${NDP} RPS=${RPS}"
     # Warm-up burst
-    ${FAASMSPEED} -h ${HOST} -u ndp -n ${NDP} -N 4 -f ${FS_ARGS} -c -x ${TIMEOUT} -t 180000 -r ${RPS} -p ${PARALLELISM} -o > /dev/null 2>&1
-    ${FAASMSPEED} -h ${HOST} -u ndp -n ${NDP} -N 4 -f ${FS_ARGS} -c -x ${TIMEOUT} -t ${WARMUP_TIME} -r ${RPS} -p ${PARALLELISM} > /dev/null 2>&1
-    ${FAASMSPEED} -h ${HOST} -u ndp -n ${NDP} -N 4 -f ${FS_ARGS} -c -x ${TIMEOUT} -t ${WARMUP_TIME} -r ${RPS} -p ${PARALLELISM} -o > /dev/null 2>&1
+    ${FAASMSPEED} -h ${HOST} -u ndp -n ${NDP} -N 12 -f ${FS_ARGS} -c -x ${TIMEOUT} -t 180000 -r ${RPS} -p ${PARALLELISM} -o > /dev/null 2>&1
+    ${FAASMSPEED} -h ${HOST} -u ndp -n ${NDP} -N 12 -f ${FS_ARGS} -c -x ${TIMEOUT} -t ${WARMUP_TIME} -r ${RPS} -p ${PARALLELISM} > /dev/null 2>&1
+    ${FAASMSPEED} -h ${HOST} -u ndp -n ${NDP} -N 12 -f ${FS_ARGS} -c -x ${TIMEOUT} -t ${WARMUP_TIME} -r ${RPS} -p ${PARALLELISM} -o > /dev/null 2>&1
     sleep 1
-    ${FAASMSPEED} -h ${HOST} -u ndp -n ${NDP} -N 4 -f ${FS_ARGS} -c -m ${MONITOR_HOSTS} -x ${TIMEOUT} -t ${TIME_PER} -r ${RPS} -p ${PARALLELISM} >> $OUTFILE
+    ${FAASMSPEED} -h ${HOST} -u ndp -n ${NDP} -N 12 -f ${FS_ARGS} -c -m ${MONITOR_HOSTS} -x ${TIMEOUT} -t ${TIME_PER} -r ${RPS} -p ${PARALLELISM} >> $OUTFILE
 done
 sleep 60
 
