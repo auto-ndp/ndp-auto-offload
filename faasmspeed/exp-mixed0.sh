@@ -26,7 +26,7 @@ printf "" > $OUTFILE
 
 FS_ARGS="-f wordcount -f substr -f thumbnailer_decode -f pcakmm -f simple_get ${WC_DATASET} ${SUB_DATASET} ${PNG_DATASET} ${PCA_DATASET} ${GET_DATASET}"
 RPS_LIST="0.05 $(seq 0.1 0.1 4)"
-NDP_LIST="0:0:0:0:0 6:9:0:6:0 12:12:12:12:0 12:0:12:12:0"
+NDP_LIST=":0:0:0:0:0 :6:9:0:6:0 :12:12:12:12:0 :12:0:12:12:0"
 TIME_PER=20
 FAASMSPEED=faasmspeed
 PARALLELISM=4
@@ -39,7 +39,7 @@ MONITOR_HOSTS='luna:8125;kone:8125'
 for NDP in ${NDP_LIST}
 do
 
-NDPA=$(echo $NDP | tr ':' ' ')
+NDPA=$(sed 's/:/ -n /g' <<< "$NDP")
 
 for RPS in ${RPS_LIST}
 do
