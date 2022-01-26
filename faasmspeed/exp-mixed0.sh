@@ -25,7 +25,7 @@ echo Writing results to $OUTFILE
 printf "" > $OUTFILE
 
 FS_ARGS="-f wordcount -f substr -f thumbnailer_decode -f pcakmm -f simple_get ${WC_DATASET} ${SUB_DATASET} ${PNG_DATASET} ${PCA_DATASET} ${GET_DATASET}"
-RPS_LIST="0.05 $(seq 0.1 0.1 4)"
+RPS_LIST="0.05\n$(seq 0.1 0.1 4)"
 NDP_LIST="0:0:0:0:0 6:9:0:6:0 12:12:12:12:0 12:0:12:12:0"
 TIME_PER=20
 FAASMSPEED=faasmspeed
