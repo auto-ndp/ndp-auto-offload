@@ -40,6 +40,8 @@ t_data <- raw_csv %>%
    )
 function_name <- toString(first(t_data$opts_function))
 
+rps_accuracy <- if (min(t_data$avg_rps_avg_rps) < 1.0) 0.1 else 1
+
 usms <- 1.0/1000.0
 uss <- usms/1000.0
 
@@ -73,8 +75,8 @@ gplt <- ggplot(t_data %>% filter(rps_offset < 0.05),
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
   geom_line(aes(y = latency_us_med*uss)) +
   geom_point(aes(y = latency_us_med*uss, shape = ndp_factor)) +
-  scale_x_log10(breaks = log_breaks(n=10), label = scales::label_comma()) +
-  scale_y_log10(breaks = log_breaks(n=10), label = scales::label_comma(), expand = c(0.01,0)) +
+  scale_x_log10(breaks = log_breaks(n=10), label = scales::label_comma(accuracy = rps_accuracy)) +
+  scale_y_log10(breaks = c(0.01, 0.1, 0.25, 0.5, 1, 2, 4, 8, 16, 32), label = c('0.01', '0.1', '0.25', '0.5', '1', '2', '4', '8', '16', '32')) +
   labs(title = "Latency for a given request per second rate", color = "% NDP", shape = "% NDP") +
   xlab("Throughput [requests/second]") + ylab("Median latency [s]")
 
@@ -142,9 +144,9 @@ gplt <- ggplot(t_data %>% group_by(ndp_percent) %>% summarise(max(avg_rps_avg_rp
   geom_line(aes(y = `max(avg_rps_avg_rps)`)) +
   geom_point(aes(y = `max(avg_rps_avg_rps)`, shape = `first(ndp_factor)`)) +
   scale_x_continuous(breaks = c(0, 25, 33, 50, 67, 75, 100, 110), labels=(\(x) ifelse(x <= 100, as.character(x), 'AoS'))) +
-  scale_y_continuous(breaks = breaks_pretty(n=10), label = scales::label_comma(), expand = c(0,0), limits=c(0,max(t_data$avg_rps_avg_rps * 1.05))) +
+  scale_y_continuous(breaks = breaks_pretty(n=10), label = scales::label_comma(accuracy = rps_accuracy), expand = c(0,0), limits=c(0,max(t_data$avg_rps_avg_rps * 1.05))) +
   labs(title = "Requests per second achieved", shape = "% NDP") +
-  xlab("Fraction offloaded [%]") + ylab("Maximum throughput [requests/second]")
+  xlab("Fraction offloaded [%]") + ylab("Max throughput [req/second]")
 
 pdf(paste0(paper_plot_path, "max_rps.pdf"), width=paper_plot_w, height=paper_plot_h, useDingbats = FALSE, family = paper_font, pointsize = paper_pointsize)
 plot(gplt)
@@ -215,13 +217,31 @@ gplt <- ggplot(t_data %>% filter(rps_offset < 0.05),
     aes(x = avg_rps_avg_rps, group = ndp_factor, color = ndp_factor)) +
   coord_cartesian(ylim = c(0, 100)) +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
-  geom_line(aes(y = 50.0*(monitor_storagecpums_user_sum + monitor_storagecpums_nice_sum + monitor_storagecpums_system_sum + monitor_storagecpums_irq_sum + monitor_storagecpums_softirq_sum)/(monitor_storagecpums_user_sum + monitor_storagecpums_nice_sum + monitor_storagecpums_system_sum + monitor_storagecpums_idle_sum + monitor_storagecpums_iowait_sum + monitor_storagecpums_irq_sum + monitor_storagecpums_softirq_sum) + 50.0*(monitor_computecpums_user_sum + monitor_computecpums_nice_sum + monitor_computecpums_system_sum + monitor_computecpums_irq_sum + monitor_computecpums_softirq_sum)/(monitor_computecpums_user_sum + monitor_computecpums_nice_sum + monitor_computecpums_system_sum + monitor_computecpums_idle_sum + monitor_computecpums_iowait_sum + monitor_computecpums_irq_sum + monitor_computecpums_softirq_sum))) +
+  geom_line(aes(y = 100.0*(12.0/38.0)*(monitor_storagecpums_user_sum + monitor_storagecpums_nice_sum + monitor_storagecpums_system_sum + monitor_storagecpums_irq_sum + monitor_storagecpums_softirq_sum)/(monitor_storagecpums_user_sum + monitor_storagecpums_nice_sum + monitor_storagecpums_system_sum + monitor_storagecpums_idle_sum + monitor_storagecpums_iowait_sum + monitor_storagecpums_irq_sum + monitor_storagecpums_softirq_sum) + 100.0*(26.0/38.0)*(monitor_computecpums_user_sum + monitor_computecpums_nice_sum + monitor_computecpums_system_sum + monitor_computecpums_irq_sum + monitor_computecpums_softirq_sum)/(monitor_computecpums_user_sum + monitor_computecpums_nice_sum + monitor_computecpums_system_sum + monitor_computecpums_idle_sum + monitor_computecpums_iowait_sum + monitor_computecpums_irq_sum + monitor_computecpums_softirq_sum))) +
   scale_x_log10(breaks = log_breaks(n=10), label = scales::label_comma(accuracy = 0.1)) +
   scale_y_continuous(breaks = breaks_pretty(n=10), label = scales::label_comma(accuracy = 1)) +
   labs(title = "CPU load", color = "% NDP", shape = "% NDP") +
   xlab("Throughput [requests/second]") + ylab("Cluster CPU utilization (%)")
 
 pdf(paste0(paper_plot_path, "cpu_load.pdf"), width=paper_plot_w, height=paper_plot_h, useDingbats = FALSE, family = paper_font, pointsize = paper_pointsize)
+plot(gplt)
+dev.off()
+gplt
+```
+
+### Cluster-total System+User MS / Total MS / Total requests
+```{r total_utilization_req}
+gplt <- ggplot(t_data %>% filter(rps_offset < 0.05),
+    aes(x = avg_rps_avg_rps, group = ndp_factor, color = ndp_factor)) +
+  # coord_cartesian(ylim = c(0, 100)) +
+  paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
+  geom_line(aes(y = (100.0*(12.0/38.0)*(monitor_storagecpums_user_sum + monitor_storagecpums_nice_sum + monitor_storagecpums_system_sum + monitor_storagecpums_irq_sum + monitor_storagecpums_softirq_sum)/(monitor_storagecpums_user_sum + monitor_storagecpums_nice_sum + monitor_storagecpums_system_sum + monitor_storagecpums_idle_sum + monitor_storagecpums_iowait_sum + monitor_storagecpums_irq_sum + monitor_storagecpums_softirq_sum) + 100.0*(26.0/38.0)*(monitor_computecpums_user_sum + monitor_computecpums_nice_sum + monitor_computecpums_system_sum + monitor_computecpums_irq_sum + monitor_computecpums_softirq_sum)/(monitor_computecpums_user_sum + monitor_computecpums_nice_sum + monitor_computecpums_system_sum + monitor_computecpums_idle_sum + monitor_computecpums_iowait_sum + monitor_computecpums_irq_sum + monitor_computecpums_softirq_sum)) / results_count)) +
+  scale_x_log10(breaks = log_breaks(n=10), label = scales::label_comma(accuracy = 0.1)) +
+  scale_y_continuous(breaks = breaks_pretty(n=10), label = scales::label_comma()) +
+  labs(title = "CPU load", color = "% NDP", shape = "% NDP") +
+  xlab("Throughput [requests/second]") + ylab("Cluster CPU utilization per request (%/req)")
+
+pdf(paste0(paper_plot_path, "cpu_load_per_req.pdf"), width=paper_plot_w, height=paper_plot_h, useDingbats = FALSE, family = paper_font, pointsize = paper_pointsize)
 plot(gplt)
 dev.off()
 gplt
@@ -306,7 +326,7 @@ ggplot(t_data) +
   geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = (monitor_computecpums_user_sum + monitor_computecpums_system_sum + monitor_computecpums_nice_sum) / (results_count), group = ndp_factor, color = ndp_factor, linetype = 'Compute')) +
   geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = (monitor_storagecpums_user_sum + monitor_storagecpums_system_sum + monitor_storagecpums_nice_sum) / (results_count), group = ndp_factor, color = ndp_factor, linetype = 'Storage')) +
   scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
-  scale_y_continuous(trans = 'identity') +
+  scale_y_continuous(trans = 'identity', breaks = pretty_breaks(n=20)) +
   labs(title = "Average CPU ms per request (user+system)", color = "% NDP", shape = "% NDP", linetype = "Node") +
   xlab("Req/s") + ylab("count")
 ```
