@@ -1,14 +1,14 @@
 ---
-title: "Faasm-NDP experimental results"
+title: "Faasm-NDP Mixed workload experimental results"
 author: "Jakub Szewczyk"
-date: "2022-01-12"
+date: "2022-01-28"
 output:
   html_document:
     toc: yes
   pdf_document:
     toc: yes
 params:
-  input_path: "wtable.csv"
+  input_path: "mixtable.csv"
 ---
 
 ```{r setup, include=FALSE}
@@ -23,7 +23,7 @@ knitr::opts_chunk$set(echo = FALSE)
 # for interactive session:
 # params <- list(input_path = "wtable.csv")
 
-raw_csv <- import(params$input_path)
+raw_csv <- import("mixtable.csv")
 
 t_data <- raw_csv %>%
   mutate (
@@ -38,7 +38,7 @@ t_data <- raw_csv %>%
     latency_us_q99pct = pmin(latency_us_q99pct, latency_us_q3 + 1.5*(latency_us_q3 - latency_us_q1)),
     rps_offset = abs(avg_rps_avg_rps - opts_req_rps) / opts_req_rps
    )
-function_name <- toString(first(t_data$opts_function))
+function_name <- 'mixed0'
 
 rps_accuracy <- if (min(t_data$avg_rps_avg_rps) < 1.0) 0.1 else 1
 
@@ -54,7 +54,7 @@ paper_theme <- theme_minimal() +
     plot.title=element_blank(),
     legend.margin=margin(0,0,0,0,"cm")
   )
-set1_scale <- brewer_pal(palette="Set1")(8)
+set1_scale <- brewer_pal(palette="Set1")(24)
 set1_scale[6] <- "#000000"
 paper_disc_scale <- scale_color_manual(values = set1_scale)
 paper_fill_scale <- scale_fill_manual(values = set1_scale)
@@ -70,11 +70,11 @@ paper_plot_path <- paste0('plots/', function_name, '_')
 ### Latency median(rps)
 ```{r latency_rps_median}
 # ymin = latency_us_q1*plot_scale, , ymax = latency_us_q3*plot_scale
-gplt <- ggplot(t_data %>% filter(rps_offset < 0.05),
-    aes(x = avg_rps_avg_rps, group = ndp_factor, color = ndp_factor)) +
+gplt <- ggplot(t_data %>% filter(rps_offset < 0.05) %>% filter(opts_function == 'pcakmm'),
+    aes(x = opts_first_rps, group = interaction(opts_first_ndp, opts_function), color = interaction(opts_first_ndp, opts_function))) +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
   geom_line(aes(y = latency_us_med*uss)) +
-  geom_point(aes(y = latency_us_med*uss, shape = ndp_factor)) +
+#  geom_point(aes(y = latency_us_med*uss, shape = ndp_factor)) +
   scale_x_log10(breaks = log_breaks(n=10), label = scales::label_comma(accuracy = rps_accuracy)) +
   scale_y_log10(breaks = c(0.01, 0.1, 0.25, 0.5, 1, 2, 4, 8, 16, 32), label = c('0.01', '0.1', '0.25', '0.5', '1', '2', '4', '8', '16', '32')) +
   labs(title = "Latency for a given request per second rate", color = "% NDP", shape = "% NDP") +
@@ -138,13 +138,14 @@ gplt
 
 ```{r max_rps}
 
-gplt <- ggplot(t_data %>% group_by(ndp_percent) %>% summarise(max(avg_rps_avg_rps), first(ndp_factor)),
-    aes(x = ndp_percent, group = 1)) +
+max_rps_data <- t_data %>% group_by(opts_function, opts_first_ndp) %>% summarise(rps= max(avg_rps_avg_rps), first(ndp_factor))
+gplt <- ggplot(max_rps_data,
+    aes(x = opts_first_ndp, group = opts_function, color = opts_function)) +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
-  geom_line(aes(y = `max(avg_rps_avg_rps)`)) +
-  geom_point(aes(y = `max(avg_rps_avg_rps)`, shape = `first(ndp_factor)`)) +
+  geom_line(aes(y = rps)) +
+  geom_point(aes(y = rps, shape = `first(ndp_factor)`)) +
   scale_x_continuous(breaks = c(0, 25, 33, 50, 67, 75, 100, 110), labels=(\(x) ifelse(x <= 100, as.character(x), 'AoS'))) +
-  scale_y_continuous(breaks = breaks_pretty(n=10), label = scales::label_comma(accuracy = rps_accuracy), expand = c(0,0), limits=c(0,max(t_data$avg_rps_avg_rps * 1.05))) +
+  scale_y_continuous(breaks = breaks_pretty(n=10), label = scales::label_comma(accuracy = rps_accuracy), expand = c(0.1,0)) +
   labs(title = "Requests per second achieved", shape = "% NDP") +
   xlab("Fraction offloaded [%]") + ylab("Max throughput [req/second]")
 
@@ -192,7 +193,7 @@ ggplot(t_data) +
 
 ### Per-node System+User MS / Total MS
 ```{r cpums_load}
-gplt <- ggplot(t_data %>% filter(rps_offset < 0.05),
+gplt <- ggplot(t_data %>% filter(rps_offset < 0.05, opts_function=='pcakmm'),
     aes(x = avg_rps_avg_rps, group = ndp_factor, color = ndp_factor)) +
   coord_cartesian(ylim = c(0, 100)) +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
@@ -347,9 +348,9 @@ ggplot(t_data) +
 ### Average active memory
 ```{r plot_mem_active_c}
 cmembase <- as.double(min(t_data$monitor_computemem_active_min))
-ggplot(t_data %>% filter(ndp_factor != "AoS")) +
+ggplot(t_data) +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
-  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_computemem_active_avg + monitor_computemem_inactive_avg, group = ndp_factor, color = ndp_factor, linetype = 'Compute')) +
+  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_computemem_active_avg - !!cmembase, group = ndp_factor, color = ndp_factor, linetype = 'Compute')) +
   scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
   scale_y_continuous(trans = 'identity', breaks = breaks_pretty(n=20), label = scales::label_comma(accuracy = 1)) +
   labs(title = "Average Active memory per request over baseline") +
@@ -358,9 +359,9 @@ ggplot(t_data %>% filter(ndp_factor != "AoS")) +
 
 ```{r plot_mem_active_s}
 smembase <- as.double(min(t_data$monitor_storagemem_active_min))
-ggplot(t_data %>% filter(ndp_factor != "AoS")) +
+ggplot(t_data) +
   paper_disc_scale + paper_fill_scale + paper_shape_scale + paper_theme +
-  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_storagemem_active_avg + monitor_storagemem_inactive_avg, group = ndp_factor, color = ndp_factor, linetype = 'Storage')) +
+  geom_line(stat = 'identity', aes(x = avg_rps_avg_rps, y = monitor_storagemem_active_avg - !!smembase, group = ndp_factor, color = ndp_factor, linetype = 'Storage')) +
   scale_x_continuous(trans = 'log', breaks = log_breaks(n=20), label = scales::label_comma(accuracy = 1)) +
   scale_y_continuous(trans = 'identity', breaks = breaks_pretty(n=20), label = scales::label_comma(accuracy = 1)) +
   labs(title = "Average Active memory per request over baseline") +
