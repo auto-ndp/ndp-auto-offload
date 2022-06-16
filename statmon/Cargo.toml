@@ -9,10 +9,11 @@ edition = "2021"
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "macros", "time", "io-util"] }
 argh = "0.1"
 anyhow = "1"
-parking_lot = "0.11.2"
+parking_lot = "0.12.1"
 libc = "0.2.112"
 itertools = "0.10.3"
 regex = "1.5"
+perfcnt = "0.8.0"
 
 [profile.release]
 lto = "fat"

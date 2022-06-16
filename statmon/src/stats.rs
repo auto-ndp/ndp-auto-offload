@@ -1,11 +1,12 @@
 use anyhow::{Context, Result};
 use itertools::Itertools;
-use std::fmt::Write as _;
+use std::fmt::{Debug, Display, Write as _};
 use std::fs::{File, OpenOptions};
 use std::io::{prelude::*, SeekFrom};
 use std::os::unix::io::AsRawFd;
 
 use crate::cpustat::{CpuStat, CpuTotals};
+use crate::eventstat::EventStat;
 use crate::iostat::{IoStat, IoTotals};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -79,14 +80,14 @@ impl StatValue {
 impl std::fmt::Display for StatValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Float(v) => v.fmt(f),
-            Self::Int(v) => v.fmt(f),
+            Self::Float(v) => std::fmt::Display::fmt(v, f),
+            Self::Int(v) => std::fmt::Display::fmt(v, f),
         }
     }
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum WhichStat {
     LoadAvg1min = 0,
     MemTotal,
@@ -101,6 +102,29 @@ pub enum WhichStat {
     CpumsIowait,
     CpumsIrq,
     CpumsSoftirq,
+    //
+    EventCycles,
+    EventInstructions,
+    EventCacheAccesses,
+    EventCacheMisses,
+    EventBranches,
+    EventBranchMisses,
+    EventStalledFrontCycles,
+    EventStalledBackCycles,
+    EventRefCycles,
+    EventPageFaults,
+    EventPageFaultsMinor,
+    EventPageFaultsMajor,
+    EventCpuMigrations,
+    EventL1DAccesses,
+    EventL1DMisses,
+    EventL1IAccesses,
+    EventL1IMisses,
+    EventDTLBAccesses,
+    EventDTLBMisses,
+    EventITLBAccesses,
+    EventITLBMisses,
+    //
     ContextSwitches,
     ProcsRunning,
     ProcsBlocked,
@@ -123,6 +147,12 @@ pub enum WhichStat {
     IoMsWriting,
     //
     TotalStatCount,
+}
+
+impl Display for WhichStat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(&self, f)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -187,6 +217,27 @@ const STATS_INIT: [Stat; WhichStat::TotalStatCount as usize] = [
     Stat::int("cpums_iowait"),
     Stat::int("cpums_irq"),
     Stat::int("cpums_softirq"),
+    Stat::int("event_cycles"),
+    Stat::int("event_instructions"),
+    Stat::int("event_cache_accesses"),
+    Stat::int("event_cache_misses"),
+    Stat::int("event_branches"),
+    Stat::int("event_branch_misses"),
+    Stat::int("event_stalled_front_cycles"),
+    Stat::int("event_stalled_back_cycles"),
+    Stat::int("event_ref_cycles"),
+    Stat::int("event_page_faults"),
+    Stat::int("event_page_faults_minor"),
+    Stat::int("event_page_faults_major"),
+    Stat::int("event_cpu_migrations"),
+    Stat::int("event_l1d_accesses"),
+    Stat::int("event_l1d_misses"),
+    Stat::int("event_l1i_accesses"),
+    Stat::int("event_l1i_misses"),
+    Stat::int("event_dtlb_accesses"),
+    Stat::int("event_dtlb_misses"),
+    Stat::int("event_itlb_accesses"),
+    Stat::int("event_itlb_misses"),
     Stat::int("cswitches"),
     Stat::int("procs_running"),
     Stat::int("procs_blocked"),
@@ -219,6 +270,7 @@ pub struct Stats {
     fp_net: Option<File>,
     fp_faasm: Option<File>,
     cpu: CpuStat,
+    events: EventStat,
     stats: [Stat; WhichStat::TotalStatCount as usize],
     net_rx_ref: i64,
     net_rxe_ref: i64,
@@ -239,6 +291,7 @@ impl Stats {
             fp_net: None,
             fp_faasm: None,
             cpu: CpuStat::new(),
+            events: EventStat::new(),
             stats: STATS_INIT,
             net_rx_ref: 0,
             net_rxe_ref: 0,
@@ -251,10 +304,12 @@ impl Stats {
     pub fn begin_range(&mut self) {
         self.in_range = true;
         self.stats.iter_mut().for_each(Stat::reset);
+        self.events.start().unwrap();
     }
 
     pub fn end_range(&mut self) {
         self.in_range = false;
+        self.events.stop().unwrap();
     }
 
     pub fn stat_packet(&self) -> String {
@@ -322,6 +377,7 @@ impl Stats {
                 .value_now
                 .seti(self.cpu.procs_io_blocked() as i64);
         }
+        self.events.update(&mut self.stats)?;
         self.io.update(&mut self.rdbuf)?;
         {
             let io = self.io.io_totals_ms();
@@ -453,7 +509,12 @@ impl Stats {
 
     fn upd_faasm(&mut self) -> Result<()> {
         if self.fp_faasm.is_none() {
-            self.fp_faasm = Some(OpenOptions::new().read(true).open("/tmp/faasm-monitor")?);
+            self.fp_faasm = Some(
+                OpenOptions::new()
+                    .read(true)
+                    .open("/tmp/faasm-monitor")
+                    .context("Couldn't open faasm monitor at /tmp/faasm-monitor")?,
+            );
         }
         let fp_faasm = self.fp_faasm.as_mut().unwrap();
         self.rdbuf.clear();
@@ -561,10 +622,7 @@ impl Stats {
         self.net_txe_ref = txe;
         let fcnt = fields.count();
         if fcnt != 17 {
-            panic!(
-                "Unexpected /proc/net/dev format: got {} fields instead of expected 17",
-                fcnt
-            );
+            panic!("Unexpected /proc/net/dev format: got {} fields instead of expected 17", fcnt);
         }
         Ok(())
     }

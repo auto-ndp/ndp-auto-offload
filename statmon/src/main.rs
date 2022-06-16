@@ -8,6 +8,7 @@ use tokio::{
 };
 
 mod cpustat;
+mod eventstat;
 mod iostat;
 mod stats;
 use crate::stats::Stats;

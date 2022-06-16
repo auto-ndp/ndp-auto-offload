@@ -25,8 +25,7 @@ pub struct IoStat {
 
 impl IoStat {
     pub fn new() -> Self {
-        let ignore_set =
-            RegexSet::new(&[r"^loop", r"^sd[a-z]\d+", r"^nvme\d+n\d+p"]).unwrap();
+        let ignore_set = RegexSet::new(&[r"^loop", r"^sd[a-z]\d+", r"^nvme\d+n\d+p"]).unwrap();
 
         Self {
             fp: None,
