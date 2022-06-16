@@ -91,11 +91,11 @@ impl EventStat {
 
     pub fn update(&mut self, stats: &mut [Stat]) -> Result<()> {
         for (&stat, events) in self.events.iter_mut() {
+            let mut val = 0u64;
             for event in events.iter_mut() {
-                stats[stat as usize]
-                    .value_now
-                    .seti(event.read().context(stat)? as i64);
+                val += event.read().context(stat)?;
             }
+            stats[stat as usize].value_now.seti(val as i64);
         }
         Ok(())
     }
