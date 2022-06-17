@@ -57,7 +57,7 @@ impl EventStat {
                 Ok(pc) => {
                     pcs.push(pc);
                 }
-                Err(e) if cpuid > 0 && e.raw_os_error() == Some(19) => {
+                Err(e) if cpuid > 0 => {
                     break;
                 }
                 Err(e) => {
@@ -66,7 +66,9 @@ impl EventStat {
                 }
             }
         }
-        self.events.insert(stat, pcs);
+        if !pcs.is_empty() {
+            self.events.insert(stat, pcs);
+        }
         self
     }
 
