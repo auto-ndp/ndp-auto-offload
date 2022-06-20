@@ -57,7 +57,7 @@ impl EventStat {
                 Ok(pc) => {
                     pcs.push(pc);
                 }
-                Err(e) if cpuid > 0 => {
+                Err(_e) if cpuid > 0 => {
                     break;
                 }
                 Err(e) => {

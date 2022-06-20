@@ -13,7 +13,7 @@ parking_lot = "0.12.1"
 libc = "0.2.112"
 itertools = "0.10.3"
 regex = "1.5"
-perfcnt = "0.8.0"
+perfcnt = { path = "./rust-perfcnt" }
 
 [profile.release]
 lto = "fat"

@@ -4,3 +4,6 @@
 [submodule "serverless-benchmarks"]
 	path = serverless-benchmarks
 	url = git@github.com:auto-ndp/serverless-benchmarks.git
+[submodule "statmon/rust-perfcnt"]
+	path = statmon/rust-perfcnt
+	url = git@github.com:eigenraven/rust-perfcnt.git
